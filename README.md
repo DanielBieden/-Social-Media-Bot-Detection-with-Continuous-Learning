@@ -1,1 +1,1 @@
-This is the repo for Social Media Bot Detection with Continuous Learning from Group-3 from the University Ulm.
+This is the repo for "Social Media Bot Detection with Continuous Learning" for the course "Natural Language Processing and Neural Language Models" from the University Ulm.
