@@ -87,12 +87,16 @@ class Cresci17(Dataset):
             'protected':{np.nan: 0},
         }
         self.user_data = self.user_data.replace(clean_dict)
+        clean_dict = {
+            'favorite_count':{np.nan: 0},
+        }
+        self.tweet_data = self.tweet_data.replace(clean_dict)
 
         # remove tweets and user profiles without text content
         self.tweet_data = self.tweet_data.dropna(subset=['text'])
         self.user_data = self.user_data.dropna(subset=['name', 'screen_name'])
 
-        #print("medians:", self.user_data.median(numeric_only=True))
+        #print("medians:", self.user_data.median())
 
     def __len__(self):
         """
