@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 import os
-
+from constants import CLEAN_DICT
 class Cresci17SetTypes(Enum):
     GENUINE_USER = 1
     FAKE_FOLLOWER = 2
@@ -82,11 +82,7 @@ class Cresci17(Dataset):
                                         'retweet_count', 'reply_count', 'favorite_count', 'num_hashtags', 'num_urls', 'num_mentions', 'timestamp'])
 
         # clean up missing values
-        clean_dict = {
-            'verified':{np.nan: 0},
-            'protected':{np.nan: 0},
-        }
-        self.user_data = self.user_data.replace(clean_dict)
+        self.user_data = self.user_data.replace(CLEAN_DICT)
         clean_dict = {
             'favorite_count':{np.nan: 0},
         }
@@ -111,7 +107,7 @@ class Cresci17(Dataset):
         :param idx: the index for one sample of the dataset (user profile)
         :return: a dictionary with the user profile data, list of tweets. Additionally, returns the label for the dataset
         """
-        # get row if the user profile and its id
+        # get row of the user profile and their id
         profile = self.user_data.iloc[idx]
         user_id = profile["id"]
 
