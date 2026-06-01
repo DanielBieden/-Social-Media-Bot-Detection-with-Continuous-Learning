@@ -1,5 +1,4 @@
 from importlib.resources import path
-from logging import root
 import shutil
 import pandas as pd
 from torch.utils.data import Dataset
@@ -8,7 +7,7 @@ import os
 from dataset_utils.constants import CLEAN_USER_DICT, USER_COLUMNS, merge_users_with_labels
 
 class Twibot22(Dataset):
-    """"
+    """
     Dataset for the Twibot-22. The downloaded *.json files or a directory,named "Twibot22", containing them, need to be in the directory /datasets.
     """
     def __init__(self, root):
@@ -29,7 +28,7 @@ class Twibot22(Dataset):
         #defines the paths to the user data, labels and tweets
         user_data_path = os.path.join(root, "Twibot22", "user.json")
         labels_path = os.path.join(root, "Twibot22", "label.csv")
-        tweet_paths = [
+        self.tweet_paths = [
             os.path.join(root, "Twibot22", f"tweet{i}.json")
             for i in range(9)
         ]
@@ -37,7 +36,7 @@ class Twibot22(Dataset):
         #validation of the expected paths 
         assert os.path.exists(user_data_path)
         assert os.path.exists(labels_path)      
-        for path in tweet_paths:
+        for path in self.tweet_paths:
             assert os.path.exists(path)  
 
         #reads the data from the files and cleans them
@@ -46,16 +45,7 @@ class Twibot22(Dataset):
 
         self.user_data = self.user_data[USER_COLUMNS] 
         self.user_data = self.user_data.replace(CLEAN_USER_DICT)
-        self.user_data = self.user_data.dropna(
-        subset=['id',
-        'name',
-        'screen_name',
-        'statuses_count',
-        'followers_count',
-        'friends_count',
-        'favourites_count',
-        'listed_count',
-        'lang'])
+        self.user_data = self.user_data.dropna(subset=USER_COLUMNS)
         self.user_data = merge_users_with_labels(self.user_data, self.labels_dt)
 
     def __len__(self):
@@ -65,7 +55,7 @@ class Twibot22(Dataset):
         """
         return len(self.user_data)
     
-    def get_sample(self, idx):
+    def __getitem__(self, idx):
         """
         reads out one user profile and its associated tweets from the dataset
         :param idx: the index for one sample of the dataset (user profile)
@@ -90,11 +80,9 @@ class Twibot22(Dataset):
 
         for path in self.tweet_paths:
             df = pd.read_json(path)
-
             tweets = df[df["user_id"] == user_id]
-
-        if not tweets.empty:
-            all_tweets.append(tweets)
+            if not tweets.empty:
+                all_tweets.append(tweets)
 
         if len(all_tweets) == 0:
             return pd.DataFrame()
