@@ -1,30 +1,54 @@
 import tarfile
 import json
 import pandas as pd
+from warnings import warn
+from platformdirs import user_data_path
 from torch.utils.data import Dataset
 import os
 from constants import CLEAN_USER_DICT, USER_COLUMNS, merge_users_with_labels
 
 class Gilani17(Dataset):
     """
-        Dataset for the Gilani-2017. The zipped dataset file should be named 'gilani-2017.tar' and should be placed in the directory /datasets.
+        Dataset for the Gilani-2017. The zipped dataset file should be named 'gilani-2017.tar.gz' and should be placed in the directory /datasets.
     """
 
-    def _init_(self, root, extract_dir):
+    def __init__(self, root : str):
 
-        #extract dataset into extract_dir if it is not already extracted
+        if not os.path.exists(root):
+            warn(f"Dataset directory not found. Please make sure the dataset directory exists at the specified path: {root}")
+            return
+        
+        default_path = os.path.join(root, "gilani-2017.tar.gz")
+        extract_dir = os.path.join(root, "Gilani17")
+
+        if not os.path.exists(default_path) and not os.path.exists(extract_dir):
+            warn("Dataset file not found. Please make sure 'gilani-2017.tar.gz' is in the dataset directory.")
+            return
+
+        # extract dataset into Gilani17 if it is not already extracted
         if not os.path.exists(extract_dir):
             os.makedirs(extract_dir, exist_ok=True)
+            with tarfile.open(default_path, "r:gz") as tar:
+                tar.extractall(extract_dir)
+            os.remove(default_path)
+            print("Finished 'Gilani17' extraction")
 
-        with tarfile.open(root, "r:gz") as tar:
-            tar.extractall(extract_dir)
 
         #validates the expected files are present in the extract_dir
-        user_data_path = os.path.join(extract_dir, "gilani-2017_tweets.json")
-        labels_path = os.path.join(extract_dir, "gilani-2017.tsv")
+        user_data_path = os.path.join(os.path.join(root, "Gilani17"), "gilani-2017_tweets.json")
+        labels_path = os.path.join(os.path.join(root, "Gilani17"), "gilani-2017.tsv")
 
-        assert os.path.exists(user_data_path)
-        assert os.path.exists(labels_path)
+        if not os.path.exists(user_data_path):
+            warn(
+                "Dataset 'Gilani17.gilani-2017_processed_user_objects.json' file not found. Please make sure 'gilani-2017.tar' is in the dataset directory and that it contains the expected files.",                    UserWarning
+            )
+            return
+        
+        if not os.path.exists(labels_path):
+            warn(
+                "Dataset 'Gilani17.gilani-2017.tsv' file not found. Please make sure 'gilani-2017.tar' is in the dataset directory and that it contains the expected files.",                    UserWarning
+            )
+            return
 
         #reads the data from the files
         self.labels_dt = pd.read_csv(labels_path, sep="\t", header=None, names=["id", "label"])
@@ -32,29 +56,33 @@ class Gilani17(Dataset):
         with open(user_data_path, "r") as f:
             data = json.load(f)
 
-        normalized_data = pd.json_normalize(data)
+        normalized_data = pd.json_normalize(data, sep=".")
 
-        # cleans the data
-        self.user_data = normalized_data.rename(columns={
-            "user.id": "id",
-            "user.name": "name",
-            "user.screen_name": "screen_name",
-    })
+        # flatten the nested user object into the columns expected by the pipeline
+        rename_map = {
+            f"user.{column}": column
+            for column in USER_COLUMNS
+            if f"user.{column}" in normalized_data.columns
+        }
+        self.user_data = normalized_data.rename(columns=rename_map).copy()
 
-        self.user_data = self.user_data[[c for c in USER_COLUMNS if c in self.user_data.columns]]
+        available_columns = [column for column in USER_COLUMNS if column in self.user_data.columns]
+        self.user_data = self.user_data[available_columns]
         self.user_data = self.user_data.replace(CLEAN_USER_DICT)
-        self.user_data = self.user_data.dropna(subset=USER_COLUMNS)
+        self.user_data = self.user_data.dropna(subset=available_columns)
         self.user_data = self.user_data[self.user_data["lang"] == "en"]
 
-        #merges users with labels to have a single dataframe with all relevant information for the rest of the pipeline
-        self.user_data = self.user_data.merge_users_with_labels(self.labels_dt, on="id", how="left")
+        # merges users with labels to have a single dataframe with all relevant information for the rest of the pipeline
+        self.user_data = merge_users_with_labels(self.user_data, self.labels_dt)
+        for i, profile in self.user_data.iterrows():
+            print(profile)
 
 
-    def _len_(self):
+    def __len__(self):
         return len(self.user_data)
 
 
-    def _getitem_(self, idx):
+    def __getitem__(self, idx : int):
         """
         retrieves a single user sample from the dataset
 
@@ -63,3 +91,6 @@ class Gilani17(Dataset):
         """
         profile = self.user_data.iloc[idx]
         return profile.to_dict()
+    
+if __name__ == "__main__":
+        Gilani17("datasets")

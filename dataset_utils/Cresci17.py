@@ -4,9 +4,11 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 import os
-from constants import CLEAN_DICT
+from constants import CLEAN_USER_DICT
+
+
 class Cresci17SetTypes(Enum):
-    GENUINE_USER = 1
+    GENUINE_USER = 1    
     FAKE_FOLLOWER = 2
     SOCIAL_SPAM_1 = 3
     SOCIAL_SPAM_2 = 4
@@ -82,7 +84,7 @@ class Cresci17(Dataset):
                                         'retweet_count', 'reply_count', 'favorite_count', 'num_hashtags', 'num_urls', 'num_mentions', 'timestamp'])
 
         # clean up missing values
-        self.user_data = self.user_data.replace(CLEAN_DICT)
+        self.user_data = self.user_data.replace(CLEAN_USER_DICT)
         clean_dict = {
             'favorite_count':{np.nan: 0},
         }
