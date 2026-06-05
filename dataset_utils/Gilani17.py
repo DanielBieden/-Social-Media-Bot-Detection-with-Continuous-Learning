@@ -13,10 +13,6 @@ class Gilani17(Dataset):
     """
 
     def __init__(self, root : str):
-
-        if not os.path.exists(root):
-            warn(f"Dataset directory not found. Please make sure the dataset directory exists at the specified path: {root}")
-            return
         
         default_path = os.path.join(root, "gilani-2017.tar.gz")
         extract_dir = os.path.join(root, "Gilani17")

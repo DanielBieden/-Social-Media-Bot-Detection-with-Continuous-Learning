@@ -13,7 +13,7 @@ class Cresci19(Dataset):
 
     def __init__(self):
         """
-        :param root: the filepath of the dataset directory in which the dataset is stored.
+        self.user_data will contain all user profile features and the label for each user in the dataset.
         """
         root = "datasets"
         #validity checks for the expected dataset file
@@ -70,6 +70,7 @@ class Cresci19(Dataset):
 
 
         self.user_data = merge_users_with_labels(self.labels_dt, self.user_data)
+        print(self.user_data)
 
 
 

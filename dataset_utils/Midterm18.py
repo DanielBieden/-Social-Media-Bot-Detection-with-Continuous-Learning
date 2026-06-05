@@ -17,10 +17,6 @@ class Midterm18(Dataset):
         self.user_data will contain all user profile features and the label for each user in the dataset. 
         :param root: the filepath of the dataset directory in which the dataset is stored. 
         """
-
-        if not os.path.exists(root):
-            warn(f"Dataset directory not found. Please make sure the dataset directory exists at the specified path: {root}")
-            return
         
         #extract dataset into extract_dir if it is not already extracted
         default_path = os.path.join(root, "midterm-2018.tar.gz")
@@ -48,6 +44,15 @@ class Midterm18(Dataset):
                 "Dataset 'Midterm18.midterm-2018.tsv' file not found. Please make sure 'midterm-2018.tar.gz' is in the dataset directory and that it contains the expected files.",                    UserWarning
             )
             return
+        
+        size = 0
+        for i,profile in self.user_data.iterrows():
+            print(profile)
+            size = size + 1
+            if i == 9:
+                break
+
+        print(size)
 
         #reads the data and normalizes it into the right format  
         self.labels_dt = pd.read_csv(
@@ -67,12 +72,19 @@ class Midterm18(Dataset):
         available_columns = [column for column in USER_COLUMNS if column in self.user_data.columns]
         self.user_data = self.user_data[available_columns]
         self.user_data = self.user_data.dropna(subset=available_columns)
+        self.user_data = self.user_data.replace(CLEAN_USER_DICT)
         self.user_data = self.user_data[self.user_data["lang"] == "en"]
 
         #merges users with labels to have a single dataframe with all relevant information for the rest of the pipeline
         self.user_data = merge_users_with_labels(self.labels_dt, self.user_data)
-        for i, profile in self.user_data.iterrows():
-            print(profile)
+
+        size = 0
+        for i,profile in self.user_data.iterrows():
+            size = size + 1
+
+
+        print(size)
+    
 
 
     def __len__(self):
