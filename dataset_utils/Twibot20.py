@@ -1,18 +1,22 @@
 from importlib.resources import path
-from constants import USER_COLUMNS, CLEAN_USER_DICT   
-import pandas as pd
-import json
+   
+
 import ijson
 from zipfile import ZipFile
 from warnings import warn
-from torch.utils.data import Dataset
+from torch.utils.data import IterableDataset
+try:
+    from .constants import UserData, TweetData, Sample, normalize_user_id
+except ImportError:
+    from constants import UserData, TweetData, Sample, normalize_user_id
+
 import os
 
-class Twibot20(Dataset):
+class Twibot20(IterableDataset):
     """
     Dataset for the Twibot-20. The downloaded *.json files or a directory containing them,named "Twibot20", need to be in the directory /datasets.
     """
-    def __init__(self,sample_size: int | None = None, root : str | None = None):
+    def __init__(self, root : str | None = None):
         """
         :param root: the filepath of the dataset directory in which the dataset is stored.
         """
@@ -32,68 +36,53 @@ class Twibot20(Dataset):
             os.remove(default_path) # removes the zip file after extraction to save space
             print("Finished 'Twibot-20' extraction and removed the zip file")
 
-        data_path = os.path.join(root, "Twibot20", "node.json")
-        if not os.path.exists(data_path):
+        self.data_path = os.path.join(root, "Twibot20", "node.json")
+        if not os.path.exists(self.data_path):
             warn(
                 "Dataset Twibot20's 'support.json' file not found. Please make sure 'support.json' is in the dataset directory.",                    UserWarning
             )
             return
+
+
+    def __iter__(self):
+        users = {}
+        labels = {}
+
+
+        with open(self.data_path, "rb") as f:
+            for row in ijson.items(f, "item"):
+                user_id = normalize_user_id(row["id"])
+                users[user_id] = UserData.from_row(row)
+
+        for path in self.tweet_paths:
+            if not os.path.exists(path):
+                continue
+
+            with open(path, "rb") as f:
+                for row in ijson.items(f, "item"):
+
+                    normalized_row = dict(row)
+                    normalized_row["user_id"] = normalized_row.get("user_id", normalized_row.get("author_id", 0))
+
+                    user_id = normalize_user_id(normalized_row.get("user_id", 0))
+                    user = users.get(user_id)
+                    bot_label = labels.get(user_id)
+
+                    if user is None or bot_label is None:
+                        continue
+
+                    yield Sample(
+                        tweet_data=TweetData.from_row(normalized_row),
+                        user_data=user,
+                        label=str(bot_label),
+                    )
+
+
         
-        chunk_idx = 0
-        samples_in_chunk = 0
-
-        out = open(
-        os.path.join(root, "Twibot20", f"chunk_{chunk_idx}.jsonl"),
-            "w",
-        encoding="utf-8")
-
-        with open("Twibot20", "rb") as f:
-            for sample in ijson.items(f, "item"):
-                out.write(json.dumps(sample) + "\n")
-                samples_in_chunk += 1
-
-            if samples_in_chunk == sample_size:
-                out.close()
-
-                chunk_idx += 1
-                samples_in_chunk = 0
-
-        out.close()
-
-        chunk_paths = []
-        for i in range(chunk_idx):
-            chunk_path = os.path.join(root,"Twibot20",f"chunk_{i}.jsonl")
-            chunk_paths.append(chunk_path)
-
-       
-
-        data = pd.read_json(chunk_paths[0], lines = True)
-
-        # flatten the nested user object into the columns expected by the pipeline
-        rename_map = {
-            f"profile.{column}": column
-            for column in USER_COLUMNS
-            if f"profile.{column}" in data.columns
-        }
-        self.user_data = data.rename(columns=rename_map).copy()
-        available_columns = [column for column in USER_COLUMNS if column in self.user_data.columns]
-        self.user_data = self.user_data[available_columns]
-        self.user_data = self.user_data.replace(CLEAN_USER_DICT)
-    
-        self.user_data = self.user_data.dropna(subset=available_columns)
-       
-        size = 0
-        for i,profile in self.user_data.iterrows():
-            print(profile)
-            size = size + 1
-            if i == 9:
-                break
-
-        print(size)
         
 
 if __name__ == "__main__":
-    Twibot20(100)
+    Twibot20()
 
         
        

@@ -3,10 +3,11 @@ from warnings import warn
 from zipfile import ZipFile
 import csv
 from constants import Sample, UserData, TweetData
+from torch.utils.data import IterableDataset
 
 
 
-class Cresci18:   
+class Cresci18(IterableDataset):   
     """
     Dataset for the Cresci18. The downloaded *.csv.zip files need to be in the directory /datasets 
                               or in another dataset whose filepath needs to be given as param to the constructor.
@@ -55,7 +56,6 @@ class Cresci18:
                 "Dataset Cresci18's users.csv file not found. Please make sure 'users.csv' is in the Cresci18 directory.",                    UserWarning
                 )
             return
-        print("hello")
         if not os.path.exists(self.tweets_data_path):
             warn(
                 "Dataset Cresci18's tweets.csv' file not found. Please make sure 'tweets.csv' is in the Cresci18 directory.",                    UserWarning
@@ -70,32 +70,49 @@ class Cresci18:
         
         users = {}
         bot_label = 0
+        bad_ids = set()
         with open(self.user_data_path, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f, delimiter=",")
-
             for row in reader:
-                print(row)
-                print(row.keys())
                 user_id = row["id"]
-                bot_label = row["bot"]
-                users[user_id] = UserData.from_row(row)
-               
+                if row["bot"] == 0:
+                    bot_label = "human"
+                elif row["bot"] == 1:
+                    bot_label = "bot"
+                else:
+                    bot_label = ""
+                try:
+                    users[user_id] = UserData.from_row(row)
+                except(ValueError):
+                    bad_ids.add(row["id"])
+                    continue
+            print("Bad ids that werent read into samples",bad_ids)
             
-        with open(self.tweets_data_path, newline = ",", encoding="utf-8") as f:
-           reader = csv.DictReader(f)
+        with open(self.tweets_data_path, newline = "", encoding="utf-8") as f:
+           reader = csv.DictReader(f, delimiter=",")
            for row in reader:
             user = users[row["user_id"]]
         
             sample = Sample(
                 tweet_data=TweetData.from_row(row),
                 user_data=user,
-                label= int(bot_label)
+                label= str(bot_label)
                 )
 
             yield sample
 
 if __name__ == "__main__":
-    Cresci18()
+    Cresci18() 
+    example = Cresci18()
+
+    for i, sample in enumerate(example):
+        print(f"\n--- SAMPLE {i} ---")
+        print("tweet:", sample.tweet_data.text[:120])
+        print("user_id:", sample.user_data.id)
+        print("label:", sample.label)
+        print("Sample", sample)
+        if i == 2:
+            break
         
     
 
