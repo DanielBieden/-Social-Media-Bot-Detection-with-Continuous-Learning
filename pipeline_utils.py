@@ -1,6 +1,10 @@
 import math
 import re
+
+import numpy as np
 import torch
+from torch import nn
+from torch.utils.data import TensorDataset, DataLoader
 
 
 def create_profile_vector(data):
@@ -23,7 +27,7 @@ def create_profile_vector(data):
     ])
     return profile_embedding
 
-def create_tweet_vector(data, tokenizer, model ,batch_size = math.inf, max_tweets = math.inf, device = 'cuda' if torch.cuda.is_available() else 'cpu'):
+def create_tweet_vectors(data, tokenizer, model, batch_size = math.inf, max_tweets = math.inf, device ='cuda' if torch.cuda.is_available() else 'cpu'):
     """
     creates the tweets embedding vector for the provided user.
     :param device: the device on which to process the data.
@@ -63,3 +67,72 @@ def create_tweet_vector(data, tokenizer, model ,batch_size = math.inf, max_tweet
         index += batch_size
 
     return torch.atleast_2d(final_embeddings).detach().cpu()
+
+
+def train_classifier(classifier, criterion, optimizer ,input_samples, ground_truth_labels, epochs = 15, device = 'cuda' if torch.cuda.is_available() else 'cpu'):
+    classifier.train()
+    # create dataset from ground_truths and embedding features for batch processing
+    input_tensors = torch.tensor(np.array(input_samples))
+    ground_truth_tensors = torch.tensor(ground_truth_labels)
+    dataset = TensorDataset(input_tensors, ground_truth_tensors)
+    train_dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
+
+    for epoch in range(epochs):
+        classifier.train()
+        running_loss = 0.0
+
+        predictions = []
+        ground_truths = []
+
+        for batch_idx, (inputs, targets) in enumerate(train_dataloader):
+            inputs = inputs.float().to(device)
+            targets = targets.to(device)
+
+            # pass data through classifier and calculate loss
+            outputs = classifier(inputs)
+            loss = criterion(outputs, targets)
+            # optimize classifier
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # prediction
+            prediction = torch.argmax(outputs, dim=1)
+
+            # statistics
+            predictions.extend(prediction.detach().cpu().numpy())
+            ground_truths.extend(targets.detach().cpu().numpy())
+            running_loss += loss.item() * inputs.size(0)
+
+        # Calculate average loss across the entire epoch
+        epoch_loss = running_loss / len(input_samples)
+        print(f"Epoch [{epoch + 1}/{epochs}] - Loss: {epoch_loss:.4f}")
+    return ground_truths, predictions
+
+def test_classifier(classifier, input_samples, ground_truth_labels, device = 'cuda' if torch.cuda.is_available() else 'cpu'):
+
+    # create dataset from ground_truths and embedding features for batch processing
+    input_tensors = torch.tensor(np.array(input_samples))
+    ground_truth_tensors = torch.tensor(ground_truth_labels)
+    dataset = TensorDataset(input_tensors, ground_truth_tensors)
+    test_dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
+
+    classifier.eval()
+
+    predictions = []
+    ground_truths = []
+
+    for batch_idx, (inputs, targets) in enumerate(test_dataloader):
+        inputs = inputs.float().to(device)
+        targets = targets.to(device)
+
+        # pass data through classifier and calculate loss
+        with torch.inference_mode():
+            outputs = classifier(inputs)
+
+        # prediction
+        prediction = torch.argmax(outputs, dim=1)
+
+        predictions.extend(prediction.detach().cpu().numpy())
+        ground_truths.extend(targets.detach().cpu().numpy())
+    return ground_truths, predictions
