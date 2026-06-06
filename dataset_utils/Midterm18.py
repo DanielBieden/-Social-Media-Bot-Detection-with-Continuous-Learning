@@ -12,12 +12,15 @@ class Midterm18(Dataset):
     Dataset for the Midterm-2018. The zipped dataset file should be named 'midterm-2018.tar.gz' and should be placed in the directory /datasets.
     """
 
-    def __init__(self, root : str):
+    def __init__(self, root : str | None = None):
         """ 
         self.user_data will contain all user profile features and the label for each user in the dataset. 
         :param root: the filepath of the dataset directory in which the dataset is stored. 
         """
         
+        if root == None:
+            root = "datasets"
+
         #extract dataset into extract_dir if it is not already extracted
         default_path = os.path.join(root, "midterm-2018.tar.gz")
         extract_dir = os.path.join(root, "Midterm18")
@@ -27,7 +30,7 @@ class Midterm18(Dataset):
             with tarfile.open(default_path, "r:gz") as tar:
                 tar.extractall(extract_dir)
             os.remove(default_path) 
-            print("Finished 'Midterm18' extraction and removed the zip file")
+            print("Finished 'Midterm18' extraction and removed the tar file")
 
         #validates the expected files are present in the extract_dir
         user_data_path = os.path.join(extract_dir, "midterm-2018_processed_user_objects.json")
@@ -51,7 +54,6 @@ class Midterm18(Dataset):
             size = size + 1
             if i == 9:
                 break
-
         print(size)
 
         #reads the data and normalizes it into the right format  

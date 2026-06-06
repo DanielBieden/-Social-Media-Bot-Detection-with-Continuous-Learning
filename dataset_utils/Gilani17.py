@@ -12,8 +12,11 @@ class Gilani17(Dataset):
         Dataset for the Gilani-2017. The zipped dataset file should be named 'gilani-2017.tar.gz' and should be placed in the directory /datasets.
     """
 
-    def __init__(self, root : str):
+    def __init__(self, root : str | None = None):
         
+        if root == None:
+            root = "datasets" 
+            
         default_path = os.path.join(root, "gilani-2017.tar.gz")
         extract_dir = os.path.join(root, "Gilani17")
 
@@ -50,9 +53,9 @@ class Gilani17(Dataset):
         self.labels_dt = pd.read_csv(labels_path, sep="\t", header=None, names=["id", "label"])
 
         with open(user_data_path, "r") as f:
-            data = json.load(f)
+            user_data = json.load(f)
 
-        normalized_data = pd.json_normalize(data, sep=".")
+        normalized_data = pd.json_normalize(user_data, sep=".")
 
         # flatten the nested user object into the columns expected by the pipeline
         rename_map = {
@@ -70,8 +73,7 @@ class Gilani17(Dataset):
 
         # merges users with labels to have a single dataframe with all relevant information for the rest of the pipeline
         self.user_data = merge_users_with_labels(self.user_data, self.labels_dt)
-        for i, profile in self.user_data.iterrows():
-            print(profile)
+
 
 
     def __len__(self):
@@ -88,5 +90,3 @@ class Gilani17(Dataset):
         profile = self.user_data.iloc[idx]
         return profile.to_dict()
     
-if __name__ == "__main__":
-        Gilani17("datasets")

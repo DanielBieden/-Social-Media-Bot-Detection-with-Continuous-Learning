@@ -20,7 +20,7 @@ class Twibot20(Dataset):
             root = "datasets"
 
         if not os.path.exists(os.path.join(root, "Twibot20")):
-            default_path = os.path.join(root, "Twibot20.zip")
+            default_path = os.path.join(root, "data.zip")
             if not os.path.exists(default_path):
                 warn(
                 "Dataset 'Twibot20' file not found. Please make sure 'Twibot-20.zip' is in the dataset directory.",                    UserWarning
@@ -32,8 +32,8 @@ class Twibot20(Dataset):
             os.remove(default_path) # removes the zip file after extraction to save space
             print("Finished 'Twibot-20' extraction and removed the zip file")
 
-        user_data_path = os.path.join(root, "Twibot20", "support.json")
-        if not os.path.exists(user_data_path):
+        data_path = os.path.join(root, "Twibot20", "node.json")
+        if not os.path.exists(data_path):
             warn(
                 "Dataset Twibot20's 'support.json' file not found. Please make sure 'support.json' is in the dataset directory.",                    UserWarning
             )

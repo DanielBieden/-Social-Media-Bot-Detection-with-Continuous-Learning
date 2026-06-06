@@ -86,7 +86,7 @@ class Cresci17(Dataset):
         # clean up missing values
         self.user_data = self.user_data.replace(CLEAN_USER_DICT)
         clean_dict = {
-            'favorite_count':{np.nan: 0},
+            'favourites_count':{np.nan: 0},
         }
         self.tweet_data = self.tweet_data.replace(clean_dict)
 

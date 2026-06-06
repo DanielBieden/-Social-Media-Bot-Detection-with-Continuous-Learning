@@ -1,18 +1,20 @@
 import os
 from warnings import warn
 from zipfile import ZipFile
-import pandas as pd
-from constants import USER_COLUMNS, CLEAN_USER_DICT, TWEET_COLUMNS, CLEAN_TWEET_DICT
+import csv
+from constants import Sample, UserData, TweetData
 
 
 
 class Cresci18:   
     """
-    Dataset for the Twibot-20. The downloaded *.json files or a directory containing them,named "Twibot20", need to be in the directory /datasets.
+    Dataset for the Cresci18. The downloaded *.csv.zip files need to be in the directory /datasets 
+                              or in another dataset whose filepath needs to be given as param to the constructor.
     """
     def __init__(self, root : str | None = None):
         """
-        :param root: the filepath of the dataset directory in which the dataset is stored.
+        :param root: OPTIONAL,root is the filepath of the dataset directory in which the dataset is stored.
+                     Dataset directory is default directory.
         """
         if root is None:
             root = "datasets"
@@ -44,59 +46,53 @@ class Cresci18:
             os.remove(user_zip_path) # removes the zip file after extraction to save space
             print("Finished 'users.csv.zip' extraction and removed the zip file")
         
-        user_data_path = os.path.join(root, extract_dir, "users.csv" )
-        tweets_data_path = os.path.join(root, extract_dir, "tweets.csv" )
+        self.user_data_path = os.path.join(root, extract_dir, "users.csv" )
+        self.tweets_data_path = os.path.join(root, extract_dir, "tweets.csv" )
 
 
-        if not os.path.exists(user_data_path):
+        if not os.path.exists(self.user_data_path):
             warn(
                 "Dataset Cresci18's users.csv file not found. Please make sure 'users.csv' is in the Cresci18 directory.",                    UserWarning
                 )
             return
-            
-        if not os.path.exists(tweets_data_path):
+        print("hello")
+        if not os.path.exists(self.tweets_data_path):
             warn(
                 "Dataset Cresci18's tweets.csv' file not found. Please make sure 'tweets.csv' is in the Cresci18 directory.",                    UserWarning
                 )
             return
+
+
+    def __iter__(self):
+        """
+        :return : sample of the dataclass Sample{TweetData, UserData, label : int}
+        """
         
+        users = {}
+        bot_label = 0
+        with open(self.user_data_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f, delimiter=",")
 
-        self.user_data = pd.read_csv(
-        user_data_path,
-        sep=",",
-        quotechar='"',
-        engine="python",
-        on_bad_lines="skip")   
-
+            for row in reader:
+                print(row)
+                print(row.keys())
+                user_id = row["id"]
+                bot_label = row["bot"]
+                users[user_id] = UserData.from_row(row)
+               
+            
+        with open(self.tweets_data_path, newline = ",", encoding="utf-8") as f:
+           reader = csv.DictReader(f)
+           for row in reader:
+            user = users[row["user_id"]]
         
+            sample = Sample(
+                tweet_data=TweetData.from_row(row),
+                user_data=user,
+                label= int(bot_label)
+                )
 
-        self.user_data = self.user_data.replace(CLEAN_USER_DICT)
-        self.user_data["protected"] = None
-        self.user_data = self.user_data[USER_COLUMNS]
-
-        self.reader = pd.read_csv(tweets_data_path, engine="python", on_bad_lines="skip")
-        self.reader = self.reader[TWEET_COLUMNS]
-        self.reader = self.reader.replace(CLEAN_TWEET_DICT)
-
-        print(len(self.user_data))
-        print(len(self.reader))
-        
-
-    def __len__(self):
-        return len(self.user_data)
-
-
-    def __getitem__(self, idx : int):
-        profile = self.user_data.iloc[idx]
-        user_id = profile["id"]
-
-        # get all tweets from the selected user profile
-        tweets = self.reader[self.reader["user_id"] == user_id]
-        result = {
-            "profile": profile.to_dict(),
-            "tweets": tweets.to_dict("records"),
-        }
-        return result
+            yield sample
 
 if __name__ == "__main__":
     Cresci18()
