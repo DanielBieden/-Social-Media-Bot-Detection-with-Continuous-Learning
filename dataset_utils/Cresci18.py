@@ -4,22 +4,31 @@ from zipfile import ZipFile
 import csv
 from constants import Sample, UserData, TweetData
 from torch.utils.data import IterableDataset
+from dataset_utils.splitting import hash_split_multi
 
 
 
 class Cresci18(IterableDataset):   
     """
-    Dataset for the Cresci18. The downloaded *.csv.zip files need to be in the directory /datasets 
+    Dataset for the Cresci18. The downloaded *.csv.zip files can be in the directory /datasets 
                               or in another dataset whose filepath needs to be given as param to the constructor.
     """
-    def __init__(self, root : str | None = None):
+    def __init__(self, mode :str, train_split: float = 0.8, dev_split: float = 0.1, root : str |None = None):
         """
-        :param root: OPTIONAL,root is the filepath of the dataset directory in which the dataset is stored.
-                     Dataset directory is default directory.
+        :param root(OPTIONAL): the filepath of the dataset directory in which the dataset is stored, if none is given "datasets"
+        :param mode: Dataset split to use ("train", "dev", or "test").
+        :param train_split: Fraction of users assigned to the training set (e.g. 0.8 = 80%).
+        :param dev_split: Fraction of users assigned to the validation set (e.g. 0.1 = 10
+
         """
+         #__init__ does the filehandling
         if root is None:
             root = "datasets"
         
+        self.mode = mode
+
+        assert train_split + dev_split < 1.0
+
         extract_dir = "Cresci18"
         
         if not os.path.exists(os.path.join(root, extract_dir)):
@@ -65,54 +74,44 @@ class Cresci18(IterableDataset):
 
     def __iter__(self):
         """
-        :return : sample of the dataclass Sample{TweetData, UserData, label : int}
+        :return : sample of the dataclass Sample{TweetData, UserData, label : "human" or "bot" or if unlabeled then ""}
+
+        Reads the users metadata and the tweetdata. Then joins on user_id. Label is read from the user_data.
+
+
         """
         
         users = {}
-        bot_label = 0
-        bad_ids = set()
         with open(self.user_data_path, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f, delimiter=",")
+            bot_label = ""
             for row in reader:
                 user_id = row["id"]
+                users[user_id] = UserData.from_row(row)
                 if row["bot"] == 0:
                     bot_label = "human"
                 elif row["bot"] == 1:
                     bot_label = "bot"
                 else:
                     bot_label = ""
-                try:
-                    users[user_id] = UserData.from_row(row)
-                except(ValueError):
-                    bad_ids.add(row["id"])
-                    continue
-            print("Bad ids that werent read into samples",bad_ids)
+                
             
         with open(self.tweets_data_path, newline = "", encoding="utf-8") as f:
            reader = csv.DictReader(f, delimiter=",")
            for row in reader:
             user = users[row["user_id"]]
+            split = hash_split_multi(row["user_id"]) 
+            if split != self.mode:
+                continue
         
-            sample = Sample(
+            yield Sample(
                 tweet_data=TweetData.from_row(row),
                 user_data=user,
                 label= str(bot_label)
                 )
 
-            yield sample
 
-if __name__ == "__main__":
-    Cresci18() 
-    example = Cresci18()
-
-    for i, sample in enumerate(example):
-        print(f"\n--- SAMPLE {i} ---")
-        print("tweet:", sample.tweet_data.text[:120])
-        print("user_id:", sample.user_data.id)
-        print("label:", sample.label)
-        print("Sample", sample)
-        if i == 2:
-            break
+       
         
     
 

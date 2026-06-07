@@ -14,19 +14,14 @@ def clean_text(t):
 
     t = str(t)
 
-    # 1. fix HTML entities
     t = html.unescape(t)
 
-    # 2. fix unicode escape artifacts
     try:
         t = t.encode("utf-8").decode("unicode_escape")
     except Exception:
         pass
 
-    # 3. fix mojibake (â, Ã, etc.)
     t = t.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
-
-    # 4. normalize whitespace
     t = re.sub(r"\s+", " ", t)
     t = t.lower()
 
@@ -154,8 +149,8 @@ class TweetData:
         text = clean_text(row.get("text", ""))
 
         return TweetData(
-            id=str(row.get("id", 0) or 0),
-            text=str(row.get("text", "")),
+            id=str(row.get("id", 0) or row.get("tweet_id",0) or 0),
+            text=clean_text(str(row.get("text", "") or row.get("tweet","") or None)),
             user_id=normalize_user_id(row.get("user_id", row.get("author_id", 0))),
             in_reply_to_status_id=int(row.get("in_reply_to_status_id", 0) or 0),
             in_reply_to_user_id=int(row.get("in_reply_to_user_id", 0) or 0),
@@ -166,7 +161,7 @@ class TweetData:
             num_hashtags=_count_items(entities.get("hashtags", 0)),
             num_urls=_count_items(entities.get("urls", 0)),
             num_mentions=_count_items(entities.get("user_mentions", 0)),
-            timestamp=_parse_timestamp(row.get("timestamp", row.get("created_at", 0))),
+            timestamp=_parse_timestamp(row.get("timestamp") or row.get("created_at"))
         )
 
 

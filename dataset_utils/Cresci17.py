@@ -4,18 +4,28 @@ from torch.utils.data import IterableDataset
 import os
 import csv
 from constants import TweetData,UserData,Sample,Cresci17SetTypes
+from splitting import hash_split, hash_split_multi
 
 class Cresci17(IterableDataset):
     """
     Dataset for the Cresci-2017. The zipped dataset file should be named 'cresci-2017.csv.zip' and should be placed in the directory /datasets.
     """
-    def __init__(self,subset_type ,  root : str |None = None):
+    def __init__(self,subset_type , mode :str, train_split: float = 0.8, dev_split: float = 0.1, root : str |None = None):
         """
-        :param root: the filepath of the dataset directory in which the dataset is stored.
-        :param subset_type: the wanted subset of the dataset.
+        :param root(OPTIONAL): the filepath of the dataset directory in which the dataset is stored, if none is given "datasets"
+        :param mode: Dataset split to use ("train", "dev", or "test").
+        :param train_split: Fraction of users assigned to the training set (e.g. 0.8 = 80%).
+        :param dev_split: Fraction of users assigned to the validation set (e.g. 0.1 = 10
+
+        Should you want all Subsets, you need to call the constructor for all Cresci17SetTypes. 
         """
+        #__init__ does the filehandling
         if root == None:
             root = "datasets"
+
+        self.mode = mode
+
+        assert train_split + dev_split < 1.0
 
         self.subset_type = subset_type
         # select appropriate subdirectory to find wanted subset
@@ -67,39 +77,50 @@ class Cresci17(IterableDataset):
 
     def __iter__(self):
         """
-        :return : sample of the dataclass Sample{TweetData, UserData, label : int}
-        """
-        
-        users = {}
-        with open(self.user_data_path, newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f, delimiter=",")
+        :return : sample of the dataclass Sample{TweetData, UserData, label : bot_type}
 
+        Reads the users metadata and the tweetdata. Then joins on user_id. Label is type given as a parameter after validation.
+
+        """
+        users = {}
+
+        with open(self.user_data_path, newline="", encoding="latin-1") as f:
+            reader = csv.DictReader(f, delimiter=",")
+           
             for row in reader:
                 user_id = row["id"]
                 users[user_id] = UserData.from_row(row)
                
             
-        with open(self.tweet_data_path, newline = "", encoding="utf-8") as f:
+        with open(self.tweet_data_path, newline = "", encoding="latin-1") as f:
            reader = csv.DictReader(f, delimiter=",")
            for row in reader:
             user = users[row["user_id"]]
-        
+
+            #8 rows are not written correctly, they get discarded and their informarmation outputet into terminal
+            try:
+                temp_data = TweetData.from_row(row)
+            except(ValueError):
+                continue
+
+            split = hash_split_multi(row["user_id"]) 
+            if split != self.mode:
+                continue
+
             sample = Sample(
-                tweet_data=TweetData.from_row(row),
+                tweet_data=temp_data,
                 user_data=user,
                 label=str(self.subset_type.value)
                 )
             yield sample
 
-if __name__ == "__main__":
-    example = Cresci17(Cresci17SetTypes.GENUINE_USER)
 
-    for i, sample in enumerate(example):
-        print(f"\n--- SAMPLE {i} ---")
-        print("tweet:", sample.tweet_data.text[:120])
-        print("user_id:", sample.user_data.id)
-        print("label:", sample.label)
-        print("Sample", sample)
-        if i == 2:
-            break
+
+        
+
+
+
+   
+
+    
     
