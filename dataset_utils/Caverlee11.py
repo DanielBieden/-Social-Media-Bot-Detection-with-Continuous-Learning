@@ -4,6 +4,7 @@ from zipfile import ZipFile
 import csv
 from constants import Sample, UserData, TweetData
 from torch.utils.data import IterableDataset
+from splitting import hash_split_multi
 
 
 
@@ -12,7 +13,7 @@ class Caverlee11(IterableDataset):
     Dataset for the Cresci18. The downloaded *.csv.zip files can be in the directory /datasets
                               or in another dataset whose filepath needs to be given as param to the constructor.
     """
-    def __init__(self, root : str | None = None):
+    def __init__(self, mode :str, train_split: float = 0.8, dev_split: float = 0.1, root : str |None = None):
         """
         :param root: OPTIONAL,root is the filepath of the dataset directory in which the dataset is stored.
                      Dataset directory is default directory.
@@ -25,6 +26,10 @@ class Caverlee11(IterableDataset):
         if root is None:
             root = "datasets"
         
+        self.mode = mode
+
+        assert train_split + dev_split < 1.0
+
         extract_dir = "Caverlee11"
         
         if not os.path.exists(os.path.join(root, extract_dir)):
@@ -126,6 +131,9 @@ class Caverlee11(IterableDataset):
             with open(tweets_data_path, encoding="utf-8") as f:
                 reader = csv.DictReader(f, delimiter="\t", fieldnames=fieldnames_tweets)
                 for row in reader:
+                    split = hash_split_multi(row["user_id"]) 
+                    if split != self.mode:
+                        continue
                     user = users[row["user_id"]]
                     if row is None:
                         continue
@@ -135,6 +143,7 @@ class Caverlee11(IterableDataset):
                     user_data=user,
                     label=bot_label,
                 )
+                    
 
             
         
