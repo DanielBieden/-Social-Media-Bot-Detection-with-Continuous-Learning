@@ -74,12 +74,19 @@ class Cresci17(Dataset):
                 zipObj.extractall(default_file_path)
                 zipObj.close()
 
-        # load subset dataset with only relevant entries
-        self.user_data = pd.read_csv(user_data_path, usecols=['id','name','screen_name','statuses_count','followers_count','friends_count',
-                                                             'favourites_count','listed_count','lang','protected','verified'])
-        self.tweet_data = pd.read_csv(tweet_data_path, encoding="latin-1", dtype={'id': str},
+        # load subset dataset with only relevant entries and check if tweets are available (should only be relevant for TRADITIONAL_SPAM 2,3,4)
+        self.tweets_available = True
+        try:
+            self.user_data = pd.read_csv(user_data_path, usecols=['id','name','screen_name','statuses_count','followers_count','friends_count',
+                                                         'favourites_count','listed_count','lang','protected','verified'])
+        except FileNotFoundError:
+            raise FileNotFoundError("No file for users found")
+        try:
+            self.tweet_data = pd.read_csv(tweet_data_path, encoding="latin-1", dtype={'id': str},
                                       usecols=['id', 'text', 'user_id', 'in_reply_to_status_id', 'in_reply_to_user_id', 'in_reply_to_screen_name',
                                         'retweet_count', 'reply_count', 'favorite_count', 'num_hashtags', 'num_urls', 'num_mentions', 'timestamp'])
+        except FileNotFoundError:
+            self.tweets_available = False
 
         # clean up missing values
         clean_dict = {
@@ -90,10 +97,10 @@ class Cresci17(Dataset):
         clean_dict = {
             'favorite_count':{np.nan: 0},
         }
-        self.tweet_data = self.tweet_data.replace(clean_dict)
+        if self.tweets_available: self.tweet_data = self.tweet_data.replace(clean_dict)
 
         # remove tweets and user profiles without text content
-        self.tweet_data = self.tweet_data.dropna(subset=['text'])
+        if self.tweets_available: self.tweet_data = self.tweet_data.dropna(subset=['text'])
         self.user_data = self.user_data.dropna(subset=['name', 'screen_name'])
 
         #print("medians:", self.user_data.median())
@@ -115,6 +122,13 @@ class Cresci17(Dataset):
         profile = self.user_data.iloc[idx]
         user_id = profile["id"]
 
+        # return just user, as tweets are not available
+        if not self.tweets_available:
+            result = {
+            "profile": profile.to_dict(),
+            "tweets": [],
+            }
+            return result, self.subset_type.value
         # get all tweets from the selected user profile
         tweets = self.tweet_data[self.tweet_data["user_id"] == user_id]
         result = {
