@@ -9,9 +9,9 @@ try:
 except ImportError:
     from constants import UserData, TweetData, Sample, normalize_user_id
 
-from torch.utils.data import Dataset
+from torch.utils.data import IterableDataset
 
-class Twibot22(Dataset):
+class Twibot22(IterableDataset):
     """
     Dataset for the Twibot-22. The downloaded *.json files or a directory,named "Twibot22", containing them, need to be in the directory /datasets.
     """
@@ -63,16 +63,15 @@ class Twibot22(Dataset):
 
 
     def __iter__(self):
-        users = {}
         labels = {}
 
         with open(self.labels_path, newline="", encoding="utf-8") as f:
             label_data = csv.DictReader(f, delimiter=",")
 
             for item in label_data:
-                user_id = normalize_user_id(item["id"])
-                labels[user_id] = item["label"]
+               labels[normalize_user_id(item["id"])] = item["label"]
 
+        users = {}
         with open(self.user_data_path, "rb") as f:
             for row in ijson.items(f, "item"):
                 user_id = normalize_user_id(row["id"])
@@ -112,7 +111,7 @@ if __name__ == "__main__":
         print("tweet:", sample.tweet_data.text[:120])
         print("user_id:", sample.user_data.id)
         print("label:", sample.label)
-        print("Sample:", Sample)
+        print("Sample:", sample)
 
         if i == 2:
             break

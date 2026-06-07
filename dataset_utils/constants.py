@@ -1,12 +1,41 @@
+import ast
 import numpy as np
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+import html
+
+import html
+import re
+
+def clean_text(t):
+    if not t:
+        return ""
+
+    t = str(t)
+
+    # 1. fix HTML entities
+    t = html.unescape(t)
+
+    # 2. fix unicode escape artifacts
+    try:
+        t = t.encode("utf-8").decode("unicode_escape")
+    except Exception:
+        pass
+
+    # 3. fix mojibake (â, Ã, etc.)
+    t = t.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
+
+    # 4. normalize whitespace
+    t = re.sub(r"\s+", " ", t)
+    t = t.lower()
+
+    return t.strip()
 
 def normalize_user_id(value):
     text = str(value or "").strip()
     if not text:
-        return "0"
+        return "None"
     return text if text.startswith("u") else f"u{text}"
 
 
@@ -16,6 +45,34 @@ def _count_items(value):
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return int(value)
     return 0
+
+
+def _safe_dict(value):
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = ast.literal_eval(value)
+            return parsed if isinstance(parsed, dict) else {}
+        except (ValueError, SyntaxError):
+            return {}
+    return {}
+
+
+def _as_int(value):
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return int(value)
+    if value in (None, ""):
+        return 0
+    text = str(value).strip().lower()
+    if text in {"true", "false"}:
+        return int(text == "true")
+    try:
+        return int(float(text))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _parse_timestamp(value):
@@ -49,23 +106,29 @@ class UserData:
 
     @staticmethod
     def from_row(row):
-
+        profile = _safe_dict(row.get("profile"))
         return UserData(
-    id=normalize_user_id(row.get("id", 0)),
-
-    name=row.get("name", None),
-    screen_name=row.get("screen_name", None),
-
-    statuses_count=int(row.get("statuses_count", 0) or 0),
-    followers_count=int(row.get("followers_count", 0) or 0),
-    friends_count=int(row.get("friends_count", 0) or 0),
-    favourites_count=int(row.get("favourites_count", 0) or 0),
-    listed_count=int(row.get("listed_count", 0) or 0),
-
-    lang=row.get("lang", None),
-
-    verified=int(row.get("verified", 0) or 0),
-)
+            id=normalize_user_id(row.get("id", 0)),
+            name=row.get(profile.get("name")
+                                        if profile and "name" in profile
+                                        else row.get("name", None)),
+            screen_name=row.get(profile.get("username")
+                                        if profile and "username" in profile
+                                        else row.get("screen_name", None)),
+            statuses_count=_as_int(row.get("statuses_count", 0)),
+            followers_count=_as_int(profile.get("followers_count")
+                                        if profile and "followers_count" in profile
+                                        else row.get("followers_count", 0)),
+            friends_count=_as_int(profile.get("following_count")
+                                        if profile and "following_count" in profile
+                                        else row.get("friends_count", 0)),
+            favourites_count=_as_int(row.get("favourites_count", 0)),
+            listed_count=_as_int(profile.get("listed_count")
+                                        if profile and "listed_count" in profile
+                                        else row.get("listed_count", 0)),
+            lang=row.get("lang", None),
+            verified=_as_int(row.get("verified", 0)),
+        )
 
 
 @dataclass
@@ -86,8 +149,9 @@ class TweetData:
 
     @staticmethod
     def from_row(row):
-        public_metrics = row.get("public_metrics") or {}
-        entities = row.get("entities") or {}
+        public_metrics = _safe_dict(row.get("public_metrics"))
+        entities = _safe_dict(row.get("entities"))
+        text = clean_text(row.get("text", ""))
 
         return TweetData(
             id=str(row.get("id", 0) or 0),
