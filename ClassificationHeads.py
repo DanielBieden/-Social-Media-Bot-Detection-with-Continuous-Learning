@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-from triton.language import argmax
 
 
 class BaselineClassificationHead(nn.Module):

@@ -58,25 +58,22 @@ class ContinualExperimentManager:
     # STEP 1: Clusterer check + classifier expansion  (Task 3 lite)
     # ------------------------------------------------------------------
 
-    def check_clusterer_and_expand(self, clusterer_labels, ground_truth_labels, classifier):
+    def check_clusterer_and_expand(self, clusterer_labels, ground_truth_labels):
         clusterer_labels = np.array(clusterer_labels)
         valid_clusters = clusterer_labels[clusterer_labels != -1]
-        unique_clusters = np.unique(valid_clusters)
-        new_class_detected = len(unique_clusters) > 0
+        new_class_detected = len(np.unique(valid_clusters)) > 0
 
         if new_class_detected:
-            print(f"✓ Clusterer detected new cluster(s). Expanding classifier by 1.")
-            classifier.expand_classifier(num_to_add=1)
-            return 1
+            print(f"✓ Clusterer detected new cluster(s).")
+            return True
         else:
             print("⚠ Clusterer did NOT detect any new class.")
             if self.use_intervention_override:
-                print(f"  → [INTERVENTION ON] Forcing classifier expansion by 1.")
-                classifier.expand_classifier(num_to_add=1)
-                return 1
+                print(f"  → [INTERVENTION ON] Will force expansion.")
+                return True
             else:
-                print("  → [INTERVENTION OFF] Leaving classifier unchanged.")
-                return 0
+                print("  → [INTERVENTION OFF] No expansion.")
+                return False
 
     # ------------------------------------------------------------------
     # STEP 2: Recording results into the matrix
