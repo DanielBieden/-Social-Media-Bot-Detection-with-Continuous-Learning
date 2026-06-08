@@ -1,33 +1,33 @@
-from enum import Enum
+
 from zipfile import ZipFile
-import numpy as np
-import pandas as pd
-from torch.utils.data import Dataset
+from torch.utils.data import IterableDataset
 import os
+import csv
+from constants import TweetData,UserData,Sample,Cresci17SetTypes
+from splitting import hash_split, hash_split_multi
 
-class Cresci17SetTypes(Enum):
-    GENUINE_USER = 1
-    FAKE_FOLLOWER = 2
-    SOCIAL_SPAM_1 = 3
-    SOCIAL_SPAM_2 = 4
-    SOCIAL_SPAM_3 = 5
-    TRADITIONAL_SPAM_1 = 6
-    TRADITIONAL_SPAM_2 = 7
-    TRADITIONAL_SPAM_3 = 8
-    TRADITIONAL_SPAM_4 = 9
-
-
-class Cresci17(Dataset):
+class Cresci17(IterableDataset):
     """
     Dataset for the Cresci-2017. The zipped dataset file should be named 'cresci-2017.csv.zip' and should be placed in the directory /datasets.
     """
-    def __init__(self, root, subset_type):
+    def __init__(self,subset_type , mode :str, train_split: float = 0.8, dev_split: float = 0.1, root : str |None = None):
         """
-        :param root: the filepath of the dataset directory in which the dataset is stored.
-        :param subset_type: the wanted subset of the dataset.
-        """
-        self.subset_type = subset_type
+        :param root(OPTIONAL): the filepath of the dataset directory in which the dataset is stored, if none is given "datasets"
+        :param mode: Dataset split to use ("train", "dev", or "test").
+        :param train_split: Fraction of users assigned to the training set (e.g. 0.8 = 80%).
+        :param dev_split: Fraction of users assigned to the validation set (e.g. 0.1 = 10
 
+        Should you want all Subsets, you need to call the constructor for all Cresci17SetTypes. 
+        """
+        #__init__ does the filehandling
+        if root == None:
+            root = "datasets"
+
+        self.mode = mode
+
+        assert train_split + dev_split < 1.0
+
+        self.subset_type = subset_type
         # select appropriate subdirectory to find wanted subset
         default_file_path = os.path.join(root, "cresci-2017" ,"datasets_full.csv")
         subset_path  = ""
@@ -54,12 +54,12 @@ class Cresci17(Dataset):
                 raise ValueError(f"Unknown subset type for Cresci17 dataset was used: {subset_type}")
 
 
-        user_data_path = os.path.join(default_file_path, subset_path, "users.csv")
-        tweet_data_path = os.path.join(default_file_path, subset_path, "tweets.csv")
+        self.user_data_path = os.path.join(default_file_path, subset_path, "users.csv")
+        self.tweet_data_path = os.path.join(default_file_path, subset_path, "tweets.csv")
 
         # automatic unzipping of files if they don't exist in an unpackaged state
         # check if files exist
-        if not os.path.exists(user_data_path) or not os.path.exists(tweet_data_path):
+        if not os.path.exists(self.user_data_path) or not os.path.exists(self.tweet_data_path):
             # check if dataset in whole exists, else unzip it
             if not os.path.exists(default_file_path):
                 # check if zip file for the whole dataset exists
@@ -69,56 +69,58 @@ class Cresci17(Dataset):
                 with ZipFile(os.path.join(root, "cresci-2017.csv.zip")) as zipObj:
                     os.mkdir(os.path.join(root, "cresci-2017"))
                     zipObj.extractall(os.path.join(root, "cresci-2017"))
+                    
             # unzip subset
             with ZipFile(os.path.join(default_file_path, subset_path + ".zip")) as zipObj:
                 zipObj.extractall(default_file_path)
                 zipObj.close()
 
-        # load subset dataset with only relevant entries
-        self.user_data = pd.read_csv(user_data_path, usecols=['id','name','screen_name','statuses_count','followers_count','friends_count',
-                                                             'favourites_count','listed_count','lang','protected','verified'])
-        self.tweet_data = pd.read_csv(tweet_data_path, encoding="latin-1", dtype={'id': str},
-                                      usecols=['id', 'text', 'user_id', 'in_reply_to_status_id', 'in_reply_to_user_id', 'in_reply_to_screen_name',
-                                        'retweet_count', 'reply_count', 'favorite_count', 'num_hashtags', 'num_urls', 'num_mentions', 'timestamp'])
-
-        # clean up missing values
-        clean_dict = {
-            'verified':{np.nan: 0},
-            'protected':{np.nan: 0},
-        }
-        self.user_data = self.user_data.replace(clean_dict)
-        clean_dict = {
-            'favorite_count':{np.nan: 0},
-        }
-        self.tweet_data = self.tweet_data.replace(clean_dict)
-
-        # remove tweets and user profiles without text content
-        self.tweet_data = self.tweet_data.dropna(subset=['text'])
-        self.user_data = self.user_data.dropna(subset=['name', 'screen_name'])
-
-        #print("medians:", self.user_data.median())
-
-    def __len__(self):
+    def __iter__(self):
         """
-        gives the amount of user profiles in the dataset
-        :return: the length of the dataset
-        """
-        return len(self.user_data)
+        :return : sample of the dataclass Sample{TweetData, UserData, label : bot_type}
 
-    def __getitem__(self, idx):
-        """
-        reads out one user profile and its associated tweets from the dataset
-        :param idx: the index for one sample of the dataset (user profile)
-        :return: a dictionary with the user profile data, list of tweets. Additionally, returns the label for the dataset
-        """
-        # get row if the user profile and its id
-        profile = self.user_data.iloc[idx]
-        user_id = profile["id"]
+        Reads the users metadata and the tweetdata. Then joins on user_id. Label is type given as a parameter after validation.
 
-        # get all tweets from the selected user profile
-        tweets = self.tweet_data[self.tweet_data["user_id"] == user_id]
-        result = {
-            "profile": profile.to_dict(),
-            "tweets": tweets.to_dict("records"),
-        }
-        return result, self.subset_type.value
+        """
+        users = {}
+
+        with open(self.user_data_path, newline="", encoding="latin-1") as f:
+            reader = csv.DictReader(f, delimiter=",")
+           
+            for row in reader:
+                user_id = row["id"]
+                users[user_id] = UserData.from_row(row)
+               
+            
+        with open(self.tweet_data_path, newline = "", encoding="latin-1") as f:
+           reader = csv.DictReader(f, delimiter=",")
+           for row in reader:
+            user = users[row["user_id"]]
+
+            #8 rows are not written correctly, they get discarded and their informarmation outputet into terminal
+            try:
+                temp_data = TweetData.from_row(row)
+            except(ValueError):
+                continue
+
+            split = hash_split_multi(row["user_id"]) 
+            if split != self.mode:
+                continue
+
+            sample = Sample(
+                tweet_data=temp_data,
+                user_data=user,
+                label=str(self.subset_type.value)
+                )
+            yield sample
+
+
+
+        
+
+
+
+   
+
+    
+    
