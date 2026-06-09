@@ -10,8 +10,8 @@ except ImportError:
     from constants import UserData, TweetData, Sample, normalize_user_id
 
 from torch.utils.data import IterableDataset
-from dataset_utils.splitting import hash_split_multi
-
+from splitting import hash_split_multi
+from collections import defaultdict
 class Twibot22(IterableDataset):
     """
     Dataset for the Twibot-22. The downloaded *.json files or a directory,named "Twibot22", containing them, need to be in the directory /datasets.
@@ -74,12 +74,11 @@ class Twibot22(IterableDataset):
                 )
 
     def __iter__(self):
-        #Having the dictionaries is good for lookup
         labels = {}
         with open(self.labels_path, newline="", encoding="utf-8") as f:
             label_data = csv.DictReader(f, delimiter=",")
             for item in label_data:
-               labels[normalize_user_id(item["id"])] = item["label"]
+                labels[normalize_user_id(item["id"])] = item["label"]
 
         users = {}
         with open(self.user_data_path, "rb") as f:
@@ -88,19 +87,27 @@ class Twibot22(IterableDataset):
                 users[user_id] = UserData.from_row(row)
 
         for path in self.tweet_paths:
-            #even if only one tweet file is donloaded it will run
             if not os.path.exists(path):
                 continue
 
             with open(path, "rb") as f:
-                
+
+                current_user_id = None
+                current_tweets = []
+
                 for row in ijson.items(f, "item"):
 
                     normalized_row = dict(row)
-                    normalized_row["user_id"] = normalized_row.get("user_id", normalized_row.get("author_id", 0))
+                    normalized_row["user_id"] = normalized_row.get(
+                        "user_id",
+                        normalized_row.get("author_id", 0)
+                    )
 
-                    user_id = normalize_user_id(normalized_row.get("user_id", 0))
-                    split = hash_split_multi(user_id) 
+                    user_id = normalize_user_id(
+                        normalized_row.get("user_id", 0)
+                    )
+
+                    split = hash_split_multi(user_id)
                     if split != self.mode:
                         continue
 
@@ -110,12 +117,43 @@ class Twibot22(IterableDataset):
                     if user is None or bot_label is None:
                         continue
 
-                    yield Sample(
-                        tweet_data=TweetData.from_row(normalized_row),
-                        user_data=user,
-                        label=str(bot_label),
+                    # erster User
+                    if current_user_id is None:
+                        current_user_id = user_id
+
+                    # neuer User -> alten User yielden
+                    if user_id != current_user_id:
+
+                        yield Sample(
+                            tweet_data=current_tweets,
+                            user_data=users[current_user_id],
+                            label=str(labels[current_user_id]),
+                        )
+
+                        current_user_id = user_id
+                        current_tweets = []
+
+                    current_tweets.append(
+                        TweetData.from_row(normalized_row)
                     )
 
+                # letzten User nach Dateiende yielden
+                if current_tweets:
+                    yield Sample(
+                        tweet_data=current_tweets,
+                        user_data=users[current_user_id],
+                        label=str(labels[current_user_id]),
+                    )
+                        
+if __name__ == "__main__":
+    example = Twibot22("train",0.8,0.1)
+    users = set()
+    for i,sample in enumerate(example):
+        print(len(sample.tweet_data))
+        print(sample)   
+    
+        if i == 2:
+            break                
     
 
     

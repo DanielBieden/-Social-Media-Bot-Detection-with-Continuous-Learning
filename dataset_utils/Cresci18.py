@@ -4,7 +4,9 @@ from zipfile import ZipFile
 import csv
 from constants import Sample, UserData, TweetData
 from torch.utils.data import IterableDataset
-from dataset_utils.splitting import hash_split_multi
+from splitting import hash_split_multi
+from collections import defaultdict
+from langdetect import detect,LangDetectException
 
 
 
@@ -74,42 +76,107 @@ class Cresci18(IterableDataset):
 
     def __iter__(self):
         """
-        :return : sample of the dataclass Sample{TweetData, UserData, label : "human" or "bot" or if unlabeled then ""}
+            :return : sample of the dataclass Sample{TweetData, UserData, label : "human" or "bot" or if unlabeled then ""}
 
-        Reads the users metadata and the tweetdata. Then joins on user_id. Label is read from the user_data.
-
-
+            Reads the users metadata and the tweetdata. Then joins on user_id. Label is read from the user_data.
         """
-        
+
         users = {}
         with open(self.user_data_path, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f, delimiter=",")
-            bot_label = ""
             for row in reader:
-                user_id = row["id"]
-                users[user_id] = UserData.from_row(row)
-                if row["bot"] == 0:
-                    bot_label = "human"
-                elif row["bot"] == 1:
-                    bot_label = "bot"
+                users[row["id"]] = UserData.from_row(row)
+
+        last_user = None
+        current_tweets = []
+        current_user_obj = None
+        current_label = ""
+
+        with open(self.tweets_data_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f, delimiter=",")
+
+            for i, row in enumerate(reader):
+
+                user_id = row["user_id"]
+
+                # User-Wechsel -> flush
+                if last_user is not None and user_id != last_user:
+
+                    if current_tweets:
+                        if current_user_obj is None:
+                            continue
+
+                        yield Sample(
+                            tweet_data=current_tweets,
+                            user_data=current_user_obj,
+                            label=str(current_label),
+                        )
+
+                    current_tweets = []
+
+                last_user = user_id
+
+                text = row["text"]
+
+                try:
+                    if text and text.strip():
+                        lang = detect(text)
+                    else:
+                        lang = None
+                except LangDetectException:
+                    lang = None
+
+                if lang != "en":
+                    continue
+
+                split = hash_split_multi(user_id)
+                if split != self.mode:
+                    continue
+
+                user = users.get(user_id)
+                if user is None:
+                    continue
+
+                current_user_obj = user
+
+                # label sauber pro user bestimmen
+                raw_label = getattr(user, "bot", "")
+                if raw_label == 0:
+                    current_label = "human"
+                elif raw_label == 1:
+                    current_label = "bot"
                 else:
-                    bot_label = ""
-                
-            
-        with open(self.tweets_data_path, newline = "", encoding="utf-8") as f:
-           reader = csv.DictReader(f, delimiter=",")
-           for row in reader:
-            user = users[row["user_id"]]
-            split = hash_split_multi(row["user_id"]) 
-            if split != self.mode:
-                continue
-        
-            yield Sample(
-                tweet_data=TweetData.from_row(row),
-                user_data=user,
-                label= str(bot_label)
+                    current_label = ""
+
+                current_tweets.append(
+                    TweetData.from_row(row)
                 )
 
+                # optional: batch limit
+                if len(current_tweets) == 200:
+                    yield Sample(
+                        tweet_data=current_tweets,
+                        user_data=current_user_obj,
+                        label=str(current_label),
+                    )
+                    current_tweets = []
+
+            # letzter User flush
+            if current_tweets and current_user_obj is not None:
+                yield Sample(
+                    tweet_data=current_tweets,
+                    user_data=current_user_obj,
+                    label=str(current_label),
+                )    
+        
+if __name__ == "__main__":
+    example = Cresci18("train",0.8,0.1)
+    users = set()
+    for i,sample in enumerate(example):
+        print(len(sample.tweet_data))  
+    
+        if i == 2:
+            break
 
        
         

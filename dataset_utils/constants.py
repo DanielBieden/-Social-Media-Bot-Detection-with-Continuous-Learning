@@ -4,9 +4,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 import html
-
-import html
 import re
+
+
+
+
+    
 
 def clean_text(t):
     if not t:
@@ -167,7 +170,7 @@ class TweetData:
 
 @dataclass
 class Sample:
-    tweet_data: TweetData
+    tweet_data: list[TweetData]
     user_data: UserData
     label: str
 
