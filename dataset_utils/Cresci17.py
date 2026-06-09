@@ -4,8 +4,9 @@ from torch.utils.data import IterableDataset
 import os
 import csv
 from constants import TweetData,UserData,Sample,Cresci17SetTypes
-from splitting import hash_split, hash_split_multi
-
+from splitting import hash_split_multi
+from collections import defaultdict
+from langdetect import detect,LangDetectException
 class Cresci17(IterableDataset):
     """
     Dataset for the Cresci-2017. The zipped dataset file should be named 'cresci-2017.csv.zip' and should be placed in the directory /datasets.
@@ -76,43 +77,85 @@ class Cresci17(IterableDataset):
                 zipObj.close()
 
     def __iter__(self):
-        """
-        :return : sample of the dataclass Sample{TweetData, UserData, label : bot_type}
 
-        Reads the users metadata and the tweetdata. Then joins on user_id. Label is type given as a parameter after validation.
-
-        """
         users = {}
 
         with open(self.user_data_path, newline="", encoding="latin-1") as f:
-            reader = csv.DictReader(f, delimiter=",")
-           
+            reader = csv.DictReader(f)
             for row in reader:
-                user_id = row["id"]
-                users[user_id] = UserData.from_row(row)
-               
-            
-        with open(self.tweet_data_path, newline = "", encoding="latin-1") as f:
-           reader = csv.DictReader(f, delimiter=",")
-           for row in reader:
-            user = users[row["user_id"]]
+                users[row["id"]] = UserData.from_row(row)
 
-            #8 rows are not written correctly, they get discarded and their informarmation outputet into terminal
-            try:
-                temp_data = TweetData.from_row(row)
-            except(ValueError):
-                continue
+        with open(self.tweet_data_path, newline="", encoding="latin-1") as f:
+            reader = csv.DictReader(f)
 
-            split = hash_split_multi(row["user_id"]) 
-            if split != self.mode:
-                continue
+            current_user_id = None
+            current_tweets = []
+            current_user = None
 
-            sample = Sample(
-                tweet_data=temp_data,
-                user_data=user,
-                label=str(self.subset_type.value)
+            for i, row in enumerate(reader):
+                user_id = row["user_id"]
+
+                # Split / filtering early
+                if hash_split_multi(user_id) != self.mode:
+                    continue
+
+                try:
+                    text = row["text"]
+                    if not text or not text.strip():
+                        continue
+
+                    lang = detect(text)
+                    if lang != "en":
+                        continue
+
+                except LangDetectException:
+                    continue
+
+                # Userwechsel → altes Sample ausgeben
+                if current_user_id is not None and user_id != current_user_id:
+                    if current_tweets:
+                        yield Sample(
+                            tweet_data=current_tweets,
+                            user_data=users[current_user_id],
+                            label=str(self.subset_type.value)
+                        )
+
+                    current_tweets = []
+
+                # neuer User initialisieren
+                if user_id != current_user_id:
+                    current_user_id = user_id
+                    current_user = users[user_id]
+
+                try:
+                    current_tweets.append(TweetData.from_row(row))
+                except ValueError:
+                    continue
+
+                if current_user is None:
+                    continue
+                yield Sample(
+                        tweet_data=current_tweets,
+                        user_data=current_user,
+                        label=str(self.subset_type.value)
+                    )
+                current_tweets = []
+
+            # letzter User flush
+            if current_user_id is not None and current_tweets:
+                yield Sample(
+                    tweet_data=current_tweets,
+                    user_data=users[current_user_id],
+                    label=str(self.subset_type.value)
                 )
-            yield sample
+        
+if __name__ == "__main__":
+    example = Cresci17(Cresci17SetTypes.FAKE_FOLLOWER,"train",0.8,0.1)
+    users = set()
+    for i,sample in enumerate(example):
+        users.add(sample.user_data.id)
+    print(len(users))   
+    
 
 
 

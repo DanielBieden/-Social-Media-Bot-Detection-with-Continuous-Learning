@@ -5,6 +5,7 @@ import csv
 from constants import Sample, UserData, TweetData
 from torch.utils.data import IterableDataset
 from splitting import hash_split_multi
+from langdetect import detect,LangDetectException
 
 
 
@@ -80,70 +81,113 @@ class Caverlee11(IterableDataset):
 
 
     def __iter__(self):
-        """
-        :return : sample of the dataclass Sample{TweetData, UserData, label}
 
-        Reads the users metadata and the tweetdata. Then joins on user_id. Label is type given as a parameter after validation.
-
-        """
-        # makes it easier to handle with the labels
         datasets = [
-        (
-            self.polluters_data_path,
-            self.polluters_tweets_data_path,
-            "bot",
-        ),
-        (
-            self.users_data_path,
-            self.users_tweets_data_path,
-            "human",
-        ),
-            ]
-        # the .txt files do not have a header so, I am creating them from the READ_ME
+            (self.polluters_data_path, self.polluters_tweets_data_path, "bot"),
+            (self.users_data_path, self.users_tweets_data_path, "human"),
+        ]
+
         fieldnames_metadata = [
-        "id",
-        "created_at",
-        "collected_at",
-        "following_count",
-        "followers_count",
-        "tweets_count",
-        "screen_name_len",
-        "description_len",
-                    ]
-        
+            "id",
+            "created_at",
+            "collected_at",
+            "following_count",
+            "followers_count",
+            "tweets_count",
+            "screen_name_len",
+            "description_len",
+        ]
+
         fieldnames_tweets = [
-        "user_id",
-        "id",
-        "text",
-        "Created_at",
-                    ]
+            "user_id",
+            "id",
+            "text",
+            "Created_at",
+        ]
 
+        for metadata_path, tweets_path, label in datasets:
 
-        users = {}
-        for metadata_path, tweets_data_path, bot_label in datasets:
-
+            # --- metadata laden ---
+            users = {}
             with open(metadata_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f, delimiter="\t", fieldnames=fieldnames_metadata)
                 for row in reader:
-                    user_id = row["id"]
-                    users[user_id] = UserData.from_row(row)
+                    users[row["id"]] = UserData.from_row(row)
 
-            with open(tweets_data_path, encoding="utf-8") as f:
+            # --- tweets streaming ---
+            with open(tweets_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f, delimiter="\t", fieldnames=fieldnames_tweets)
+
+                current_user_id = None
+                current_tweets = []
+                current_user = None
+
                 for row in reader:
-                    split = hash_split_multi(row["user_id"]) 
-                    if split != self.mode:
+
+                    user_id = row["user_id"]
+
+                    # split filter
+                    if hash_split_multi(user_id) != self.mode:
                         continue
-                    user = users[row["user_id"]]
-                    if row is None:
+
+                    if not row or not row.get("text"):
                         continue
-                
-                    yield Sample(
-                    tweet_data=TweetData.from_row(row),
-                    user_data=user,
-                    label=bot_label,
-                )
+
+                    try:
+                        lang = detect(row["text"])
+                        if lang != "en":
+                            continue
+                    except LangDetectException:
+                        continue
+
+                    # userwechsel → flush
+                    if current_user_id is not None and user_id != current_user_id:
+                        if current_tweets:
+                            yield Sample(
+                                tweet_data=current_tweets,
+                                user_data=users[current_user_id],
+                                label=label,
+                            )
+                        current_tweets = []
+
+                    # neuer user initialisieren
+                    if user_id != current_user_id:
+                        current_user_id = user_id
+                        current_user = users[user_id]
+
+                    try:
+                        current_tweets.append(TweetData.from_row(row))
+                    except ValueError:
+                        continue
+
+                    if current_user is None:
+                        continue
                     
+
+                    yield Sample(
+                            tweet_data=current_tweets,
+                            user_data=current_user,
+                            label=label,
+                        )
+                    current_tweets = []
+
+                # letzter user flush
+                if current_user_id is not None and current_tweets:
+                    yield Sample(
+                        tweet_data=current_tweets,
+                        user_data=users[current_user_id],
+                        label=label,
+                    )
+                    
+
+if __name__ == "__main__":
+    example = Caverlee11("train",0.8,0.1)
+    users = set()
+    for i,sample in enumerate(example):
+        users.add(sample.user_data.id)
+        print(len(sample.tweet_data))
+    print(len(users))
+        
 
             
         

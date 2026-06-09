@@ -8,8 +8,8 @@ try:
 except ImportError:
     from constants import UserData, TweetData, Sample, normalize_user_id, _safe_dict, clean_text
 import os
-
-from dataset_utils.splitting import hash_split_multi
+from collections import defaultdict
+from splitting import hash_split_multi
 class Twibot20(IterableDataset):
     """
     Dataset for the Twibot-20. The downloaded *.json files or a directory containing them,named "Twibot20", need to be in the directory /datasets.
@@ -78,20 +78,35 @@ class Twibot20(IterableDataset):
         for path in self.files:
             with open(path, "r", encoding="utf-8") as f:
 
-                data = json.load(f)  # Twibot-20 files are NOT huge JSON arrays per line, usually list-based
+                data = json.load(f)
+
+                current_user_id = None
+                current_tweets = []
+                current_user = None
+                current_label = None
+
                 tweet_id = 0
+
                 for row in data:
-            
+
+                    if row is None:
+                        continue
 
                     user_id = normalize_user_id(row.get("ID"))
                     profile = _safe_dict(row.get("profile"))
-                    split = hash_split_multi(user_id) 
+
+                    split = hash_split_multi(user_id)
                     if split != self.mode:
                         continue
 
+                    tweets = row.get("tweet", [])
+                    if tweets is None:
+                        continue
+
+                    # user / label einmal pro row bestimmen
                     user = UserData.from_row({
-                    "id": user_id,
-                    "profile": profile
+                        "id": user_id,
+                        "profile": profile
                     })
 
                     bot_label = row.get("label")
@@ -99,50 +114,70 @@ class Twibot20(IterableDataset):
                         bot_label = "bot"
                     elif bot_label == "0":
                         bot_label = "human"
-                    elif bot_label == "":
-                        bot_label = ""
-                    elif bot_label is None:
-                        bot_label = ""
+                    else:
                         continue
-                    
-                    
-                    tweets = row.get("tweet",[])
-                    if tweets is None:
-                        continue
+
+                    # erster User initialisieren
+                    if current_user_id is None:
+                        current_user_id = user_id
+                        current_user = user
+                        current_label = bot_label
+
+                    # User-Wechsel -> alten flushen
+                    if user_id != current_user_id:
+                        if current_user == None:
+                            continue
+
+                        yield Sample(
+                            tweet_data=current_tweets,
+                            user_data= current_user,
+                            label=str(current_label),
+                        )
+
+                        current_user_id = user_id
+                        current_user = user
+                        current_label = bot_label
+                        current_tweets = []
+                        tweet_id = 0
+
+                    # Tweets sammeln
                     for tweet in tweets:
                         tweet_id += 1
                         tweet = str(tweet).strip()
                         if not tweet:
                             continue
-                        #adds missinh fields
-                        tweet_row = {
-                        "id": {tweet_id},
-                        "text": tweet,
-                        "user_id": user_id,
-                        "created_at": None,
-                        "public_metrics": {},
-                        "entities": {},
-                    }   
-                        
 
-                        yield Sample(
-                            tweet_data=TweetData.from_row(tweet_row),
-                            user_data=user,
-                            label=str(bot_label),
+                        tweet_row = {
+                            "id": tweet_id,
+                            "text": tweet,
+                            "user_id": user_id,
+                            "created_at": None,
+                            "public_metrics": {},
+                            "entities": {},
+                        }
+
+                        current_tweets.append(
+                            TweetData.from_row(tweet_row)
+                        )
+
+                # letzter User flush
+                if current_tweets:
+                    if current_user == None:
+                        continue
+                    
+                    yield Sample(
+                        tweet_data=current_tweets,
+                        user_data=current_user,
+                        label=str(current_label),
                     )
 
-    
-    
-  
+if __name__ == "__main__":
+    example = Twibot20("train", 0.8,0.1)
+    for i,sample in enumerate(example):
+        print(len(sample.tweet_data))
+        print("SAMPLE:",sample)
 
-        
-       
+        if i == 2:
+            break
 
-
-
-
-       
-
-
-
-        
+            
