@@ -4,7 +4,7 @@ from zipfile import ZipFile
 from warnings import warn
 from torch.utils.data import IterableDataset
 try:
-    from .constants import UserData, TweetData, Sample, normalize_user_id,_safe_dict, clean_text
+    from constants import UserData, TweetData, Sample, normalize_user_id,_safe_dict, clean_text
 except ImportError:
     from constants import UserData, TweetData, Sample, normalize_user_id, _safe_dict, clean_text
 import os

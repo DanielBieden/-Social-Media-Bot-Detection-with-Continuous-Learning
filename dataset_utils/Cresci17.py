@@ -111,6 +111,7 @@ class Cresci17(IterableDataset):
                 except LangDetectException:
                     continue
 
+
                 # Userwechsel → altes Sample ausgeben
                 if current_user_id is not None and user_id != current_user_id:
                     if current_tweets:
@@ -132,14 +133,6 @@ class Cresci17(IterableDataset):
                 except ValueError:
                     continue
 
-                if current_user is None:
-                    continue
-                yield Sample(
-                        tweet_data=current_tweets,
-                        user_data=current_user,
-                        label=str(self.subset_type.value)
-                    )
-                current_tweets = []
 
             # letzter User flush
             if current_user_id is not None and current_tweets:
@@ -154,6 +147,7 @@ if __name__ == "__main__":
     users = set()
     for i,sample in enumerate(example):
         users.add(sample.user_data.id)
+        print(len(sample.tweet_data))
     print(len(users))   
     
 
