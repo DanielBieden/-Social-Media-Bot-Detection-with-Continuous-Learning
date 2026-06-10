@@ -160,16 +160,6 @@ class Caverlee11(IterableDataset):
                     except ValueError:
                         continue
 
-                    if current_user is None:
-                        continue
-                    
-
-                    yield Sample(
-                            tweet_data=current_tweets,
-                            user_data=current_user,
-                            label=label,
-                        )
-                    current_tweets = []
 
                 # letzter user flush
                 if current_user_id is not None and current_tweets:

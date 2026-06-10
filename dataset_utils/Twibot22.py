@@ -11,7 +11,6 @@ except ImportError:
 
 from torch.utils.data import IterableDataset
 from splitting import hash_split_multi
-from collections import defaultdict
 class Twibot22(IterableDataset):
     """
     Dataset for the Twibot-22. The downloaded *.json files or a directory,named "Twibot22", containing them, need to be in the directory /datasets.
@@ -91,7 +90,7 @@ class Twibot22(IterableDataset):
                 continue
 
             with open(path, "rb") as f:
-
+                #Having the dictionaries is good for lookup
                 current_user_id = None
                 current_tweets = []
 
@@ -117,11 +116,11 @@ class Twibot22(IterableDataset):
                     if user is None or bot_label is None:
                         continue
 
-                    # erster User
+                    # First User
                     if current_user_id is None:
                         current_user_id = user_id
 
-                    # neuer User -> alten User yielden
+                    # New User gets detected and yields the old User
                     if user_id != current_user_id:
 
                         yield Sample(
@@ -137,7 +136,7 @@ class Twibot22(IterableDataset):
                         TweetData.from_row(normalized_row)
                     )
 
-                # letzten User nach Dateiende yielden
+                # File is read and every tweet gets yielded
                 if current_tweets:
                     yield Sample(
                         tweet_data=current_tweets,
