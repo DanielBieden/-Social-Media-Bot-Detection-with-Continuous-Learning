@@ -120,29 +120,21 @@ class Caverlee11(IterableDataset):
 
                 current_user_id = None
                 current_tweets = []
-                current_user = None
 
                 for row in reader:
 
                     user_id = row["user_id"]
 
                     # split filter
-                    if hash_split_multi(user_id) != self.mode:
-                        continue
 
                     if not row or not row.get("text"):
-                        continue
-
-                    try:
-                        lang = detect(row["text"])
-                        if lang != "en":
-                            continue
-                    except LangDetectException:
                         continue
 
                     # userwechsel → flush
                     if current_user_id is not None and user_id != current_user_id:
                         if current_tweets:
+                            if hash_split_multi(user_id) != self.mode:
+                                continue
                             yield Sample(
                                 tweet_data=current_tweets,
                                 user_data=users[current_user_id],
@@ -153,8 +145,6 @@ class Caverlee11(IterableDataset):
                     # neuer user initialisieren
                     if user_id != current_user_id:
                         current_user_id = user_id
-                        current_user = users[user_id]
-
                     try:
                         current_tweets.append(TweetData.from_row(row))
                     except ValueError:
@@ -173,10 +163,13 @@ class Caverlee11(IterableDataset):
 if __name__ == "__main__":
     example = Caverlee11("train",0.8,0.1)
     users = set()
+    size = 0
     for i,sample in enumerate(example):
         users.add(sample.user_data.id)
         print(len(sample.tweet_data))
+        size += 1
     print(len(users))
+    print(size)
         
 
             
