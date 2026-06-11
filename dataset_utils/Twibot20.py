@@ -8,7 +8,6 @@ try:
 except ImportError:
     from constants import UserData, TweetData, Sample, normalize_user_id, _safe_dict, clean_text
 import os
-from collections import defaultdict
 from splitting import hash_split_multi
 class Twibot20(IterableDataset):
     """

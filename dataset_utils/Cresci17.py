@@ -83,50 +83,42 @@ class Cresci17(IterableDataset):
         with open(self.user_data_path, newline="", encoding="latin-1") as f:
             reader = csv.DictReader(f)
             for row in reader:
+                if row["lang"] != "en" and row["lang"] != "NULL":
+                    continue
                 users[row["id"]] = UserData.from_row(row)
 
+        
         with open(self.tweet_data_path, newline="", encoding="latin-1") as f:
             reader = csv.DictReader(f)
 
             current_user_id = None
             current_tweets = []
-            current_user = None
 
             for i, row in enumerate(reader):
                 user_id = row["user_id"]
-
-                # Split / filtering early
-                if hash_split_multi(user_id) != self.mode:
-                    continue
-
-                try:
-                    text = row["text"]
-                    if not text or not text.strip():
-                        continue
-
-                    lang = detect(text)
-                    if lang != "en":
-                        continue
-
-                except LangDetectException:
-                    continue
 
 
                 # Userwechsel → altes Sample ausgeben
                 if current_user_id is not None and user_id != current_user_id:
                     if current_tweets:
-                        yield Sample(
-                            tweet_data=current_tweets,
-                            user_data=users[current_user_id],
-                            label=str(self.subset_type.value)
-                        )
+                        if hash_split_multi(current_user_id) == self.mode:
+                            temp_user_data = None
+                            temp_user_data = users.get(current_user_id)
+                            yield Sample(
+                                    tweet_data=current_tweets,
+                                    user_data= temp_user_data,
+                                    label=str(self.subset_type.value))
+                                    
+                            
 
                     current_tweets = []
+                    current_user_id = user_id
+                if current_user_id is None:
+                      current_user_id = user_id
 
                 # neuer User initialisieren
                 if user_id != current_user_id:
                     current_user_id = user_id
-                    current_user = users[user_id]
 
                 try:
                     current_tweets.append(TweetData.from_row(row))
@@ -136,19 +128,26 @@ class Cresci17(IterableDataset):
 
             # letzter User flush
             if current_user_id is not None and current_tweets:
-                yield Sample(
-                    tweet_data=current_tweets,
-                    user_data=users[current_user_id],
-                    label=str(self.subset_type.value)
-                )
+               if current_user_id in users:
+                    yield Sample(
+                            tweet_data=current_tweets,
+                            user_data= users[current_user_id],
+                            label=str(self.subset_type.value)
+                        )
         
 if __name__ == "__main__":
-    example = Cresci17(Cresci17SetTypes.FAKE_FOLLOWER,"train",0.8,0.1)
+    example = Cresci17(Cresci17SetTypes.GENUINE_USER,"train",0.8,0.1)
     users = set()
+    size = 0
     for i,sample in enumerate(example):
-        users.add(sample.user_data.id)
-        print(len(sample.tweet_data))
-    print(len(users))   
+       size += 1
+       print(len(sample.tweet_data))
+       for tweet in sample.tweet_data:
+           users.add(tweet.user_id)
+        
+       
+    print(size)
+    print(len(users))
     
 
 

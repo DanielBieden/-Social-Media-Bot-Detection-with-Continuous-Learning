@@ -176,15 +176,15 @@ class Sample:
 
 
 class Cresci17SetTypes(Enum):
-    GENUINE_USER = "human"  
-    FAKE_FOLLOWER = "Fake_Follower"
-    SOCIAL_SPAM_1 = "Social_Spam"
-    SOCIAL_SPAM_2 = "Social_Spam"
-    SOCIAL_SPAM_3 = "Social_Spam"
-    TRADITIONAL_SPAM_1 = "Traditional_Spam"
-    TRADITIONAL_SPAM_2 = "Traditional_Spam"
-    TRADITIONAL_SPAM_3 = "Traditional_Spam"
-    TRADITIONAL_SPAM_4 = "Traditional_Spam"
+    GENUINE_USER = "genuine_user"  
+    FAKE_FOLLOWER = "fake_followers"
+    SOCIAL_SPAM_1 = "social_spambots_1"
+    SOCIAL_SPAM_2 = "social_spambots_2"
+    SOCIAL_SPAM_3 = "social_spambots_3"
+    TRADITIONAL_SPAM_1 = "traditional_spambots_1"
+    TRADITIONAL_SPAM_2 = "traditional_spambots_2"
+    TRADITIONAL_SPAM_3 = "traditional_spambots_3"
+    TRADITIONAL_SPAM_4 = "traditional_spambots_4s"
 
 USER_COLUMNS = [
         'id',
