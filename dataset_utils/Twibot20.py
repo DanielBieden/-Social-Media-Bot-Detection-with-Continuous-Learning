@@ -168,22 +168,4 @@ class Twibot20(IterableDataset):
                     )
                     
 
-                  
-
-if __name__ == "__main__":
-    example = Twibot20("train",0.8,0.1)
-    users = set()
-    size = 0
-    for i,sample in enumerate(example):
-        size += 1
-        users.add(sample.user_data.id)
-        for tweet in sample.tweet_data:
-           users.add(tweet.user_id)
-        if size != len(users):
-            print(sample.user_data.id)
-        
-            
-            
-    print(size)
-    print(len(users))
             
