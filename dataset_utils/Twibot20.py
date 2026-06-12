@@ -76,38 +76,28 @@ class Twibot20(IterableDataset):
     def __iter__(self):
         for path in self.files:
             with open(path, "r", encoding="utf-8") as f:
-
                 data = json.load(f)
-
-                current_user_id = None
+                
                 current_tweets = []
-                current_user = None
-                current_label = None
-
-                tweet_id = 0
-
+                current_user_id = None
+                #for the flush of the last user
+                old_user = None
+                previous_label = None
                 for row in data:
-
-                    if row is None:
-                        continue
-
+                    
+                    # creates a user
                     user_id = normalize_user_id(row.get("ID"))
-                    profile = _safe_dict(row.get("profile"))
-
                     split = hash_split_multi(user_id)
                     if split != self.mode:
                         continue
-
-                    tweets = row.get("tweet", [])
-                    if tweets is None:
-                        continue
-
-                    # user / label einmal pro row bestimmen
+                    profile = _safe_dict(row.get("profile"))
                     user = UserData.from_row({
                         "id": user_id,
                         "profile": profile
                     })
+    
 
+                    #creates the bot_label
                     bot_label = row.get("label")
                     if bot_label == "1":
                         bot_label = "bot"
@@ -116,30 +106,37 @@ class Twibot20(IterableDataset):
                     else:
                         continue
 
-                    # erster User initialisieren
+                    if previous_label is None:
+                        previous_label = bot_label
+
+                    if old_user is None:
+                        old_user = user
+
                     if current_user_id is None:
                         current_user_id = user_id
-                        current_user = user
-                        current_label = bot_label
 
-                    # User-Wechsel -> alten flushen
-                    if user_id != current_user_id:
-                        if current_user == None:
-                            continue
+                    #creates the tweet list
+                    # Has the User changed?
+                    # yes -> reininitilize the tweet_list, as well as the current_user, 
+                    # and yield the tweets of the old list
+                    # no --> append the tweet list
+                    if current_user_id != user_id:
 
                         yield Sample(
-                            tweet_data=current_tweets,
-                            user_data= current_user,
-                            label=str(current_label),
-                        )
+                                tweet_data=current_tweets,
+                                user_data=old_user,
+                                label=str(previous_label),
+                            )
 
-                        current_user_id = user_id
-                        current_user = user
-                        current_label = bot_label
                         current_tweets = []
-                        tweet_id = 0
-
-                    # Tweets sammeln
+                        current_user_id = user_id
+                        old_user = user
+                        previous_label = bot_label
+                        
+                    tweet_id = 0
+                    tweets = row.get("tweet",[])
+                    if tweets is None:
+                        continue
                     for tweet in tweets:
                         tweet_id += 1
                         tweet = str(tweet).strip()
@@ -154,29 +151,39 @@ class Twibot20(IterableDataset):
                             "public_metrics": {},
                             "entities": {},
                         }
-
+                        
                         current_tweets.append(
                             TweetData.from_row(tweet_row)
                         )
 
-                # letzter User flush
+                #flush out the last_user
                 if current_tweets:
-                    if current_user == None:
+                    if current_user_id == None:
                         continue
-                    
+                        
                     yield Sample(
                         tweet_data=current_tweets,
-                        user_data=current_user,
-                        label=str(current_label),
+                        user_data=old_user,
+                        label=str(previous_label),
                     )
+                    
+
+                  
 
 if __name__ == "__main__":
-    example = Twibot20("train", 0.8,0.1)
+    example = Twibot20("train",0.8,0.1)
+    users = set()
+    size = 0
     for i,sample in enumerate(example):
-        print(len(sample.tweet_data))
-        print("SAMPLE:",sample)
-
-        if i == 2:
-            break
-
+        size += 1
+        users.add(sample.user_data.id)
+        for tweet in sample.tweet_data:
+           users.add(tweet.user_id)
+        if size != len(users):
+            print(sample.user_data.id)
+        
+            
+            
+    print(size)
+    print(len(users))
             
