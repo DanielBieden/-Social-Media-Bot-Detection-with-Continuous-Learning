@@ -178,7 +178,6 @@ if __name__ == "__main__":
             print(sample.user_data.id)
             print(len(sample.tweet_data))
            
-            size -= 1
             
             
             

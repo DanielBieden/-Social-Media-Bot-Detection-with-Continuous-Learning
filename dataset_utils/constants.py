@@ -5,11 +5,14 @@ from datetime import datetime
 from enum import Enum
 import html
 import re
+import decimal
 
-
-
-
-    
+def json_decimal_handler(obj):
+            if isinstance(obj, decimal.Decimal):
+                # If it's a whole number (like a Twitter ID), save as a pure integer. 
+                # If it has a decimal point, save it as a float.
+                return int(obj) if obj % 1 == 0 else float(obj)
+            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 def clean_text(t):
     if not t:
