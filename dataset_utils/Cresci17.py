@@ -6,7 +6,6 @@ import csv
 from constants import TweetData,UserData,Sample,Cresci17SetTypes
 from splitting import hash_split_multi
 from collections import defaultdict
-from langdetect import detect,LangDetectException
 class Cresci17(IterableDataset):
     """
     Dataset for the Cresci-2017. The zipped dataset file should be named 'cresci-2017.csv.zip' and should be placed in the directory /datasets.
@@ -83,72 +82,63 @@ class Cresci17(IterableDataset):
         with open(self.user_data_path, newline="", encoding="latin-1") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                users[row["id"]] = UserData.from_row(row)
+                if hash_split_multi(row["id"]) != self.mode:
+                    continue
+                if row["lang"] != "en" and row["lang"] != "NULL":
+                    continue
+                users[row["id"]] = row
 
+        tweets = defaultdict(list)
         with open(self.tweet_data_path, newline="", encoding="latin-1") as f:
-            reader = csv.DictReader(f)
-
-            current_user_id = None
-            current_tweets = []
-            current_user = None
-
-            for i, row in enumerate(reader):
+            reader = csv.DictReader(f,  delimiter=",")
+            for row in reader:
+                    
                 user_id = row["user_id"]
 
-                # Split / filtering early
-                if hash_split_multi(user_id) != self.mode:
+                if user_id not in users:
+                    continue
+                
+                if not row or not row.get("text"):
                     continue
 
-                try:
-                    text = row["text"]
-                    if not text or not text.strip():
-                        continue
+                row["in_reply_to_screen_name"] = 0
 
-                    lang = detect(text)
-                    if lang != "en":
-                        continue
-
-                except LangDetectException:
-                    continue
-
-
-                # Userwechsel → altes Sample ausgeben
-                if current_user_id is not None and user_id != current_user_id:
-                    if current_tweets:
-                        yield Sample(
-                            tweet_data=current_tweets,
-                            user_data=users[current_user_id],
-                            label=str(self.subset_type.value)
-                        )
-
-                    current_tweets = []
-
-                # neuer User initialisieren
-                if user_id != current_user_id:
-                    current_user_id = user_id
-                    current_user = users[user_id]
-
-                try:
-                    current_tweets.append(TweetData.from_row(row))
-                except ValueError:
-                    continue
-
-
-            # letzter User flush
-            if current_user_id is not None and current_tweets:
-                yield Sample(
-                    tweet_data=current_tweets,
-                    user_data=users[current_user_id],
-                    label=str(self.subset_type.value)
-                )
+                tweets[user_id].append(row)
+                
+       
+        for user_id in users:  
+            try:
+                user_tweets = tweets.get(user_id, [])   
+                processed_tweets = [TweetData.from_row(tweet_row) for tweet_row in user_tweets]
+            except ValueError:
+                continue
+            yield Sample(
+                    tweet_data=processed_tweets,
+                    user_data=UserData.from_row(users[user_id]),
+                    label=str(self.subset_type.value),
+                    )
+        
         
 if __name__ == "__main__":
-    example = Cresci17(Cresci17SetTypes.FAKE_FOLLOWER,"train",0.8,0.1)
+    example = Cresci17(Cresci17SetTypes.TRADITIONAL_SPAM_1,"train",0.8,0.1)
     users = set()
+    size = 0
     for i,sample in enumerate(example):
         users.add(sample.user_data.id)
-        print(len(sample.tweet_data))
-    print(len(users))   
+        size += 1
+        for tweet in sample.tweet_data:
+           users.add(tweet.user_id)
+        if size != len(users):
+            print(sample.user_data.id)
+     
+            
+            
+    print(size)
+    print(len(users))
+
+
+        
+   
     
 
 

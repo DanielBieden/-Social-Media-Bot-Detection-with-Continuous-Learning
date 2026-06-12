@@ -76,9 +76,10 @@ class Cresci18(IterableDataset):
 
     def __iter__(self):
         """
-            :return : sample of the dataclass Sample{TweetData, UserData, label : "human" or "bot" or if unlabeled then ""}
+        :return : sample of the dataclass Sample{TweetData, UserData, label : "human" or "bot" or if unlabeled then ""}
 
-            Reads the users metadata and the tweetdata. Then joins on user_id. Label is read from the user_data.
+        Reads the users metadata and the tweetdata. Then joins on user_id. Label is read from the user_data.
+
         """
 
         users = {}
@@ -137,46 +138,31 @@ class Cresci18(IterableDataset):
                 if user is None:
                     continue
 
-                current_user_obj = user
+                tweets_per_user[user_id].append(TweetData.from_row(row))
 
-                # label sauber pro user bestimmen
-                raw_label = getattr(user, "bot", "")
-                if raw_label == 0:
-                    current_label = "human"
-                elif raw_label == 1:
-                    current_label = "bot"
-                else:
-                    current_label = ""
+                json.dump(row["id"], out)
+                f.write("\n")
 
-                current_tweets.append(
-                    TweetData.from_row(row)
-                )
-
-                # optional: batch limit
-                if len(current_tweets) == 200:
-                    yield Sample(
-                        tweet_data=current_tweets,
-                        user_data=current_user_obj,
-                        label=str(current_label),
-                    )
-                    current_tweets = []
-
-            # letzter User flush
-            if current_tweets and current_user_obj is not None:
+            
                 yield Sample(
-                    tweet_data=current_tweets,
-                    user_data=current_user_obj,
-                    label=str(current_label),
-                )    
-        
+                        tweet_data=tweets_per_user[user_id],
+                        user_data=user,
+                        label=str(bot_label),
+                    )
+                
 if __name__ == "__main__":
     example = Cresci18("train",0.8,0.1)
     users = set()
+    size = 0
     for i,sample in enumerate(example):
-        print(len(sample.tweet_data))  
-    
-        if i == 2:
-            break
+       size += 1
+       print(len(sample.tweet_data))
+       for tweet in sample.tweet_data:
+           users.add(tweet.user_id)
+        
+       
+    print(size)
+    print(len(users))
 
        
         

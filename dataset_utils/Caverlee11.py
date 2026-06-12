@@ -107,12 +107,14 @@ class Caverlee11(IterableDataset):
 
         for metadata_path, tweets_path, label in datasets:
 
-            # --- metadata laden ---
+            # --- loading metadata---
             users = {}
             with open(metadata_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f, delimiter="\t", fieldnames=fieldnames_metadata)
                 for row in reader:
-                    users[row["id"]] = UserData.from_row(row)
+                    if hash_split_multi(row["id"]) != self.mode:
+                                continue
+                    users[row["id"]] = row
 
             # --- tweets streaming ---
             with open(tweets_path, "r", encoding="utf-8") as f:
@@ -120,41 +122,31 @@ class Caverlee11(IterableDataset):
 
                 current_user_id = None
                 current_tweets = []
-                current_user = None
-
+                #values for the last user
                 for row in reader:
-
+                    
                     user_id = row["user_id"]
-
-                    # split filter
-                    if hash_split_multi(user_id) != self.mode:
+                    if user_id not in users:
                         continue
 
                     if not row or not row.get("text"):
                         continue
-
-                    try:
-                        lang = detect(row["text"])
-                        if lang != "en":
-                            continue
-                    except LangDetectException:
-                        continue
-
-                    # userwechsel → flush
-                    if current_user_id is not None and user_id != current_user_id:
-                        if current_tweets:
-                            yield Sample(
-                                tweet_data=current_tweets,
-                                user_data=users[current_user_id],
-                                label=label,
-                            )
-                        current_tweets = []
-
-                    # neuer user initialisieren
-                    if user_id != current_user_id:
+                    #initiliaze the user at the beginning
+                    if current_user_id is None:
                         current_user_id = user_id
-                        current_user = users[user_id]
-
+                    
+                    # userwechsel → flush
+                    if user_id != current_user_id:
+                            if current_tweets:
+                                yield Sample(
+                                    tweet_data=current_tweets,
+                                    user_data=UserData.from_row(users[current_user_id]),
+                                    label=label,
+                                )
+                            current_tweets = []
+                            current_user_id = user_id
+                            
+                    #appending the tweet to the list
                     try:
                         current_tweets.append(TweetData.from_row(row))
                     except ValueError:
@@ -162,10 +154,10 @@ class Caverlee11(IterableDataset):
 
 
                 # letzter user flush
-                if current_user_id is not None and current_tweets:
+                if current_tweets and current_user_id is not None:
                     yield Sample(
                         tweet_data=current_tweets,
-                        user_data=users[current_user_id],
+                        user_data=UserData.from_row(users[current_user_id]),
                         label=label,
                     )
                     
@@ -173,11 +165,25 @@ class Caverlee11(IterableDataset):
 if __name__ == "__main__":
     example = Caverlee11("train",0.8,0.1)
     users = set()
+    size = 0
+    tweets = 0
     for i,sample in enumerate(example):
-        users.add(sample.user_data.id)
-        print(len(sample.tweet_data))
+        size += 1
+        for tweet in sample.tweet_data:
+           users.add(tweet.user_id)
+           tweets += 1
+        if size != len(users):
+            print(size)
+            print(len(users))
+            print(sample.user_data.id)
+            print(len(sample.tweet_data))
+           
+            size -= 1
+            
+            
+            
+    print(size)
     print(len(users))
-        
 
             
         
