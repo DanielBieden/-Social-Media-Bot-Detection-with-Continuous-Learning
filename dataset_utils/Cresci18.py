@@ -6,8 +6,9 @@ from constants import Sample, UserData, TweetData
 from torch.utils.data import IterableDataset
 from splitting import hash_split_multi
 from collections import defaultdict
-import duckdb
-import json
+from langdetect import detect,LangDetectException
+
+
 
 class Cresci18(IterableDataset):   
     """
@@ -82,45 +83,55 @@ class Cresci18(IterableDataset):
         """
 
         users = {}
-        output_file = os.path.join("Cresci18", "english_tweet_ids.json")
+        with open(self.user_data_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f, delimiter=",")
+            for row in reader:
+                users[row["id"]] = UserData.from_row(row)
 
-        with open(output_file, "w", encoding="utf-8") as out:
-            with open(self.user_data_path, newline="", encoding="utf-8") as f:
-                reader = csv.DictReader(f, delimiter=",")
-                bot_label = ""
-                for row in reader:
-                    if row["lang"] != "en" or row["lang"] != "Null":
-                        continue
+        last_user = None
+        current_tweets = []
+        current_user_obj = None
+        current_label = ""
 
-                    user_id = row["id"]
-                    users[user_id] = row
-                    if row["bot"] == 0:
-                        bot_label = "human"
-                    elif row["bot"] == 1:
-                        bot_label = "bot"
-                    else:
-                        bot_label = ""
-                    
-            tweets_per_user = defaultdict(list) 
+        with open(self.tweets_data_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f, delimiter=",")
 
-            con = duckdb.connect()
-            query = f"""
-            SELECT
-            t.*
-            FROM read_csv_auto('{self.tweets_data_path}') t
-            ORDER BY t.user_id
-            """     
+            for i, row in enumerate(reader):
 
-            rel = con.execute(query)
-            cols = [c[0] for c in rel.description]
-
-            for row in rel.fetchall():
-                row = dict(zip(cols, row))
                 user_id = row["user_id"]
 
+                # User-Wechsel -> flush
+                if last_user is not None and user_id != last_user:
 
-                text = row.get("text")
-                if not text or not text.strip():
+                    if current_tweets:
+                        if current_user_obj is None:
+                            continue
+
+                        yield Sample(
+                            tweet_data=current_tweets,
+                            user_data=current_user_obj,
+                            label=str(current_label),
+                        )
+
+                    current_tweets = []
+
+                last_user = user_id
+
+                text = row["text"]
+
+                try:
+                    if text and text.strip():
+                        lang = detect(text)
+                    else:
+                        lang = None
+                except LangDetectException:
+                    lang = None
+
+                if lang != "en":
+                    continue
+
+                split = hash_split_multi(user_id)
+                if split != self.mode:
                     continue
 
                 user = users.get(user_id)
