@@ -6,7 +6,6 @@ from constants import Sample, UserData, TweetData
 from torch.utils.data import IterableDataset
 from splitting import hash_split_multi
 from collections import defaultdict
-from langdetect import detect,LangDetectException
 import duckdb
 import json
 
@@ -92,8 +91,9 @@ class Cresci18(IterableDataset):
                 for row in reader:
                     if row["lang"] != "en" or row["lang"] != "Null":
                         continue
+
                     user_id = row["id"]
-                    users[user_id] = UserData.from_row(row)
+                    users[user_id] = row
                     if row["bot"] == 0:
                         bot_label = "human"
                     elif row["bot"] == 1:
@@ -109,7 +109,8 @@ class Cresci18(IterableDataset):
             t.*
             FROM read_csv_auto('{self.tweets_data_path}') t
             ORDER BY t.user_id
-    """     
+            """     
+
             rel = con.execute(query)
             cols = [c[0] for c in rel.description]
 

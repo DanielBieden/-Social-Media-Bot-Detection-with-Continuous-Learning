@@ -1,16 +1,19 @@
 import shutil
 import csv
 import ijson
+import sys
 import os
 from warnings import warn
 
+from YAJLStreamSanitizer import YAJLStreamSanitizer
 try:
-    from .constants import UserData, TweetData, Sample, normalize_user_id
+    from constants import UserData, TweetData, Sample, normalize_user_id
 except ImportError:
     from constants import UserData, TweetData, Sample, normalize_user_id
 
 from torch.utils.data import IterableDataset
 from splitting import hash_split_multi
+
 class Twibot22(IterableDataset):
     """
     Dataset for the Twibot-22. The downloaded *.json files or a directory,named "Twibot22", containing them, need to be in the directory /datasets.
@@ -23,7 +26,18 @@ class Twibot22(IterableDataset):
         :param train_split: Fraction of users assigned to the training set (e.g. 0.8 = 80%).
         :param dev_split: Fraction of users assigned to the validation set (e.g. 0.1 = 10
         """
-
+        if ijson.backend_name == 'python':
+            print("\n" + "="*70)
+            print("⚠️  WARNING: ijson is running in ultra-slow pure-Python mode!")
+            print("Parsing these multi-gigabyte files will take ages.")
+            print("\nHow to fix this:")
+            if sys.platform.startswith('win'):
+                print(" -> Open Anaconda Prompt and run: conda install -c conda-forge yajl")
+            elif sys.platform.startswith('linux'):
+                print(" -> Run: sudo apt-get install libyajl2")
+            elif sys.platform.startswith('darwin'): # Mac
+                print(" -> Run: brew install yajl")
+            print("="*70 + "\n")
 
         #__init_ does the file handling
         if root == None:
@@ -73,87 +87,103 @@ class Twibot22(IterableDataset):
                 )
 
     def __iter__(self):
+
         labels = {}
+        print("--> Loading labels...")
         with open(self.labels_path, newline="", encoding="utf-8") as f:
             label_data = csv.DictReader(f, delimiter=",")
             for item in label_data:
+                user_id = normalize_user_id(item["id"])
+                if hash_split_multi(user_id) != self.mode:
+                    continue
                 labels[normalize_user_id(item["id"])] = item["label"]
-
+        print(f"--> Loaded {len(labels)} labels for split '{self.mode}'")
+        print("--> Loading users (This will take a while via ijson)...")
         users = {}
+        user_count = 0
         with open(self.user_data_path, "rb") as f:
             for row in ijson.items(f, "item"):
                 user_id = normalize_user_id(row["id"])
-                users[user_id] = UserData.from_row(row)
+                if hash_split_multi(user_id) != self.mode:
+                    continue
+                users[user_id] = row
+                user_count += 1
+                if user_count % 50000 == 0:
+                    print(f"    Processed {user_count} users...")
+                print(f"--> Successfully cached {len(users)} users in memory.")
 
         for path in self.tweet_paths:
             if not os.path.exists(path):
                 continue
-
+            print(f"--> Opening tweet file: {os.path.basename(path)}")
             with open(path, "rb") as f:
-                #Having the dictionaries is good for lookup
+                sanitized_file = YAJLStreamSanitizer(f)
+
                 current_user_id = None
                 current_tweets = []
+                
+                try:
 
-                for row in ijson.items(f, "item"):
+                    for row in ijson.items(sanitized_file, "item"):
 
-                    normalized_row = dict(row)
-                    normalized_row["user_id"] = normalized_row.get(
-                        "user_id",
-                        normalized_row.get("author_id", 0)
-                    )
+                        normalized_row = dict(row)
+                        user_id = normalize_user_id(normalized_row.get("author_id",0))
 
-                    user_id = normalize_user_id(
-                        normalized_row.get("user_id", 0)
-                    )
+                        if user_id not in users or user_id not in labels:
+                            continue
 
-                    split = hash_split_multi(user_id)
-                    if split != self.mode:
-                        continue
+                        # First User
+                        if current_user_id is None:
+                            current_user_id = user_id
 
-                    user = users.get(user_id)
-                    bot_label = labels.get(user_id)
+                        # New User gets detected, yields the old User and updates information
+                        if user_id != current_user_id:
 
-                    if user is None or bot_label is None:
-                        continue
+                            yield Sample(
+                                tweet_data=current_tweets,
+                                user_data=UserData.from_row(users[current_user_id]),
+                                label=str(labels[current_user_id]),
+                            )
 
-                    # First User
-                    if current_user_id is None:
-                        current_user_id = user_id
+                            current_user_id = user_id
+                            current_tweets = []
 
-                    # New User gets detected and yields the old User
-                    if user_id != current_user_id:
-
+                        #appends the tweet since ids match
+                        current_tweets.append(
+                            TweetData.from_row(normalized_row)
+                        )
+                    
+                except ijson.IncompleteJSONError as e:
+                    # If a file cuts off abruptly (truncated download), we log it and move to the next file
+                    print(f"⚠️ Note: Stream ended early or hit a structural break in {os.path.basename(path)}.")
+                    print(f"   Successfully extracted data up to the break point.")
+                
+                if current_tweets:
                         yield Sample(
                             tweet_data=current_tweets,
-                            user_data=users[current_user_id],
+                            user_data=UserData.from_row(users[current_user_id]),
                             label=str(labels[current_user_id]),
                         )
 
-                        current_user_id = user_id
-                        current_tweets = []
-
-                    current_tweets.append(
-                        TweetData.from_row(normalized_row)
-                    )
-
-                # File is read and every tweet gets yielded
-                if current_tweets:
-                    yield Sample(
-                        tweet_data=current_tweets,
-                        user_data=users[current_user_id],
-                        label=str(labels[current_user_id]),
-                    )
                         
 if __name__ == "__main__":
     example = Twibot22("train",0.8,0.1)
     users = set()
+    size = 0
     for i,sample in enumerate(example):
-        print(len(sample.tweet_data))
-        print(sample)   
-    
-        if i == 2:
-            break                
-    
+       size += 1
+       if sample.user_data.id in users:
+           print("Double")
+       for tweet in sample.tweet_data:
+           users.add(tweet.user_id)
+
+       if i == 100000:
+               break
+        
+       
+    print(size)
+    print(len(users))
+            
 
     
     
