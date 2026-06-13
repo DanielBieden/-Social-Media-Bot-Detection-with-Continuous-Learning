@@ -1,7 +1,8 @@
 This is the repo for "Social Media Bot Detection with Continuous Learning" for the course "Natural Language Processing and Neural Language Models" from the University Ulm.
 
 
-## Setup Requirements
+## Setup Requirements 
+- This Step is important for fast loading for the Twibot22 dataset
 
 Before installing the Python dependencies, this project requires the **YAJL** system library to stream large dataset files at native C speeds.
 
