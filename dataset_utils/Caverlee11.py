@@ -2,9 +2,9 @@ import os
 from warnings import warn
 from zipfile import ZipFile
 import csv
-from constants import Sample, UserData, TweetData
+from dataset_utils.constants import Sample, UserData, TweetData
 from torch.utils.data import IterableDataset
-from splitting import hash_split_multi
+from dataset_utils.splitting import hash_split_multi
 from langdetect import detect,LangDetectException
 
 
