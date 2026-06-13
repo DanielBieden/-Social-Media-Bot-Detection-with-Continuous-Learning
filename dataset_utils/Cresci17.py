@@ -118,15 +118,7 @@ class Cresci17(IterableDataset):
                     label=str(self.subset_type.value),
                     )
         
-if __name__ == "__main__":
-    example = Cresci17(Cresci17SetTypes.GENUINE_USER,"train",0.8,0.1)
-   
-    for i,sample in enumerate(example):
-        print(sample.user_data)            
-      
 
-        if i == 10:
-            break
         
 
         
