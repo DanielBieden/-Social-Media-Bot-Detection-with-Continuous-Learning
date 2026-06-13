@@ -110,12 +110,12 @@ class UserData:
         profile = _safe_dict(row.get("profile"))
         return UserData(
             id=normalize_user_id(row.get("id", 0)),
-            name=row.get(profile.get("name")
+            name=row.get("name",profile.get("name")
                                         if profile and "name" in profile
                                         else row.get("name", None)),
-            screen_name=row.get(profile.get("username")
-                                        if profile and "username" in profile
-                                        else row.get("screen_name", None)),
+            screen_name=row.get("screen_name",profile.get("screen_name")
+                                        if profile and "screen_name" in profile
+                                        else row.get("user_name", None)),
             statuses_count=_as_int(row.get("statuses_count", 0)),
             followers_count=_as_int(profile.get("followers_count")
                                         if profile and "followers_count" in profile

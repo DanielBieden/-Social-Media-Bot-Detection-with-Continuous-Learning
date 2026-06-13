@@ -118,24 +118,8 @@ class Cresci17(IterableDataset):
                     label=str(self.subset_type.value),
                     )
         
-        
-if __name__ == "__main__":
-    example = Cresci17(Cresci17SetTypes.TRADITIONAL_SPAM_1,"train",0.8,0.1)
-    users = set()
-    size = 0
-    for i,sample in enumerate(example):
-        users.add(sample.user_data.id)
-        size += 1
-        for tweet in sample.tweet_data:
-           users.add(tweet.user_id)
-        if size != len(users):
-            print(sample.user_data.id)
-     
-            
-            
-    print(size)
-    print(len(users))
 
+        
 
         
    
