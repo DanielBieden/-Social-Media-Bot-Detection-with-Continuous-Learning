@@ -8,12 +8,12 @@ from warnings import warn
 import sqlite3
 
 try:
-    from constants import UserData, TweetData, Sample, normalize_user_id, json_decimal_handler
+    from dataset_utils.constants import UserData, TweetData, Sample, normalize_user_id, json_decimal_handler
 except ImportError:
-    from constants import UserData, TweetData, Sample, normalize_user_id, json_decimal_handler
+    from dataset_utils.constants import UserData, TweetData, Sample, normalize_user_id, json_decimal_handler
 
 from torch.utils.data import IterableDataset
-from splitting import hash_split_multi
+from dataset_utils.splitting import hash_split_multi
 
 class Twibot22(IterableDataset):
     """

@@ -4,11 +4,11 @@ from zipfile import ZipFile
 from warnings import warn
 from torch.utils.data import IterableDataset
 try:
-    from constants import UserData, TweetData, Sample, normalize_user_id,_safe_dict, clean_text
+    from dataset_utils.constants import UserData, TweetData, Sample, normalize_user_id,_safe_dict, clean_text
 except ImportError:
-    from constants import UserData, TweetData, Sample, normalize_user_id, _safe_dict, clean_text
+    from dataset_utils.constants import UserData, TweetData, Sample, normalize_user_id, _safe_dict, clean_text
 import os
-from splitting import hash_split_multi
+from dataset_utils.splitting import hash_split_multi
 class Twibot20(IterableDataset):
     """
     Dataset for the Twibot-20. The downloaded *.json files or a directory containing them,named "Twibot20", need to be in the directory /datasets.

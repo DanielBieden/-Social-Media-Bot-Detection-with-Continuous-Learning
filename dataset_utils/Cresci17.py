@@ -3,8 +3,8 @@ from zipfile import ZipFile
 from torch.utils.data import IterableDataset
 import os
 import csv
-from constants import TweetData,UserData,Sample,Cresci17SetTypes
-from splitting import hash_split_multi
+from dataset_utils.constants import TweetData,UserData,Sample,Cresci17SetTypes
+from dataset_utils.splitting import hash_split_multi
 from collections import defaultdict
 class Cresci17(IterableDataset):
     """
