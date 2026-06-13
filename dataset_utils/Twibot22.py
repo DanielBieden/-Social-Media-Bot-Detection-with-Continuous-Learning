@@ -87,6 +87,119 @@ class Twibot22(IterableDataset):
                     f"Dataset 'Twibot20.{path}' file not found. Please make sure every file is donwloaded in the dataset directory." 
                 )
 
+    def __iter__(self):
+        labels = {}
+        print("--> Loading labels...")
+        with open(self.labels_path, newline="", encoding="utf-8") as f:
+            label_data = csv.DictReader(f, delimiter=",")
+            for item in label_data:
+                user_id = normalize_user_id(item["id"])
+                if hash_split_multi(user_id) != self.mode:
+                    continue
+                labels[normalize_user_id(item["id"])] = item["label"]
+        print(f"--> Loaded {len(labels)} labels for split '{self.mode}'")
+        print("--> Loading users (This will take a while via ijson)...")
+        users = {}
+        user_count = 0
+        with open(self.user_data_path, "rb") as f:
+            for row in ijson.items(f, "item"):
+                user_id = normalize_user_id(row["id"])
+                if hash_split_multi(user_id) != self.mode:
+                    continue
+                users[user_id] = row
+                user_count += 1
+                if user_count % 50000 == 0:
+                    print(f"    Processed {user_count} users...")
+                    print(f"--> Successfully cached {len(users)} users in memory.")
+
+               # 1. Create a temporary database file on your disk
+        db_path = os.path.join(os.path.dirname(self.user_data_path), "temp_tweets_cache.db")
+        if os.path.exists(db_path):
+            os.remove(db_path)
+
+        print("--> Initializing disk cache database...")
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS tweets (user_id TEXT, raw_json TEXT)")
+        conn.commit()
+
+        # 2. Stream lines from files and write to Disk in high-speed batches
+        batch = []
+        batch_size = 50000  
+
+
+
+        for path in self.tweet_paths:
+            if not os.path.exists(path):
+                continue
+
+            print(f"--> Streaming tweets safely via ijson from: {os.path.basename(path)}")
+            tweet_count = 0
+            matched_count = 0
+            
+            # Open in binary mode ("rb") because ijson requires bytes
+            with open(path, "rb") as f:
+                parser = ijson.items(f, "item")
+                try:
+                    tweet_dict = next(parser)
+                except StopIteration:
+                        break 
+                
+                tweet_count += 1
+                    # Reached the end of the JSON array normally
+                if tweet_count % 100000 == 0:
+                        print(f"    [Streaming] Processed {tweet_count:,} tweets... Matched: {matched_count:,}")
+
+                raw_author_id = tweet_dict.get("author_id", 0)
+                user_id = normalize_user_id(raw_author_id)
+
+                if user_id in users and user_id in labels:
+                    try:
+                        # FIX: Use our custom handler to safely serialize Decimal values
+                        raw_json_str = json.dumps(tweet_dict, default=json_decimal_handler)
+                        batch.append((user_id, raw_json_str))
+                        matched_count += 1
+                    except Exception as e:
+                            print(f"⚠️ Warning: Failed to serialize tweet for user {user_id}: {e}")
+                            continue
+
+                    if len(batch) >= batch_size:
+                        cursor.executemany("INSERT INTO tweets VALUES (?, ?)", batch)
+                        conn.commit()
+                        batch = []
+
+        if batch:
+            cursor.executemany("INSERT INTO tweets VALUES (?, ?)", batch)
+            conn.commit()  
+                    
+    
+
+        # 4. Pull tweets per user sequentially and yield complete samples
+        print(f"--> Packaging and yielding complete samples for {len(users)} users...")
+        for user_id in users:
+            if user_id not in labels:
+                continue
+
+            cursor.execute("SELECT raw_json FROM tweets WHERE user_id = ?", (user_id,))
+            rows = cursor.fetchall()
+
+            user_tweets = [TweetData.from_row(json.loads(r[0])) for r in rows]
+
+            yield Sample(
+                tweet_data=user_tweets,
+                user_data=UserData.from_row(users[user_id]),
+                label=str(labels[user_id]),
+            )
+
+        # 5. Clean up the database file completely
+        conn.close()
+        try:
+            os.remove(db_path)
+            print("--> Temporary disk cache cleaned up successfully.")
+        except Exception as e:
+            print(f"⚠️ Note: Could not auto-delete temporary database file: {e}")
+
+            
 
     
     
