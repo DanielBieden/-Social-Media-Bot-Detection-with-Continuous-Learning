@@ -1,11 +1,26 @@
 This is the repo for "Social Media Bot Detection with Continuous Learning" for the course "Natural Language Processing and Neural Language Models" from the University Ulm.
 
 
-#DATASETS
+## Setup Requirements 
+- This Step is important for fast loading for the Twibot22 dataset
+
+Before installing the Python dependencies, this project requires the **YAJL** system library to stream large dataset files at native C speeds.
+
+### System Dependencies
+* **Windows (Anaconda):** `conda install -c conda-forge yajl`
+* **Ubuntu/Debian Linux:** `sudo apt-get install libyajl2`
+* **macOS:** `brew install yajl`
+
+### Python Installation
+Once the system library is installed, set up the environment:
+```bash
+pip install -r requirements.txt
+```
+## Datasets
 
 There are currently 8 datasets_utils implemented. They can be divided into Iterable_Datasets or (classic) Datasets.
 
-CLASSIC DATASETS:
+### CLASSIC DATASETS:
 Cresci19, Gilani17 and Midterm18 are implemented as classic Datasets. These datasets only contain information about the users.
 
 PARAMETERS:
@@ -27,7 +42,7 @@ METHODS:
             'lang',
             'verified'
 
-ITERABLE_DATASETS: 
+### ITERABLE_DATASETS: 
 
 Caverlee11, Cresci17, Cresc18, Twibot20 and Twibot22 are implemented as Iterable Datasets. 
 Each dataset contains user information as well as tweet information to varying degrees. 

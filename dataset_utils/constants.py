@@ -4,9 +4,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 import html
-
-import html
 import re
+import decimal
+
+def json_decimal_handler(obj):
+            if isinstance(obj, decimal.Decimal):
+                # If it's a whole number (like a Twitter ID), save as a pure integer. 
+                # If it has a decimal point, save it as a float.
+                return int(obj) if obj % 1 == 0 else float(obj)
+            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 def clean_text(t):
     if not t:
@@ -104,12 +110,12 @@ class UserData:
         profile = _safe_dict(row.get("profile"))
         return UserData(
             id=normalize_user_id(row.get("id", 0)),
-            name=row.get(profile.get("name")
+            name=row.get("name",profile.get("name")
                                         if profile and "name" in profile
                                         else row.get("name", None)),
-            screen_name=row.get(profile.get("username")
-                                        if profile and "username" in profile
-                                        else row.get("screen_name", None)),
+            screen_name=row.get("screen_name",profile.get("screen_name")
+                                        if profile and "screen_name" in profile
+                                        else row.get("user_name", None)),
             statuses_count=_as_int(row.get("statuses_count", 0)),
             followers_count=_as_int(profile.get("followers_count")
                                         if profile and "followers_count" in profile
@@ -167,21 +173,21 @@ class TweetData:
 
 @dataclass
 class Sample:
-    tweet_data: TweetData
+    tweet_data: list[TweetData]
     user_data: UserData
     label: str
 
 
 class Cresci17SetTypes(Enum):
-    GENUINE_USER = "human"  
-    FAKE_FOLLOWER = "Fake_Follower"
-    SOCIAL_SPAM_1 = "Social_Spam"
-    SOCIAL_SPAM_2 = "Social_Spam"
-    SOCIAL_SPAM_3 = "Social_Spam"
-    TRADITIONAL_SPAM_1 = "Traditional_Spam"
-    TRADITIONAL_SPAM_2 = "Traditional_Spam"
-    TRADITIONAL_SPAM_3 = "Traditional_Spam"
-    TRADITIONAL_SPAM_4 = "Traditional_Spam"
+    GENUINE_USER = "genuine_user"  
+    FAKE_FOLLOWER = "fake_followers"
+    SOCIAL_SPAM_1 = "social_spambots_1"
+    SOCIAL_SPAM_2 = "social_spambots_2"
+    SOCIAL_SPAM_3 = "social_spambots_3"
+    TRADITIONAL_SPAM_1 = "traditional_spambots_1"
+    TRADITIONAL_SPAM_2 = "traditional_spambots_2"
+    TRADITIONAL_SPAM_3 = "traditional_spambots_3"
+    TRADITIONAL_SPAM_4 = "traditional_spambots_4s"
 
 USER_COLUMNS = [
         'id',

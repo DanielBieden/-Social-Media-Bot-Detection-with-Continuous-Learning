@@ -7,46 +7,43 @@ from torch import nn
 from torch.utils.data import TensorDataset, DataLoader
 
 
-def create_profile_vector(data):
+def create_profile_vector(user_data):
     """
     creates the meta-data embedding vector for the provided user.
-    :param data: a dictionary corresponding to one sample from the dataset. Should contain a 'profile' entry.
+    :param user_data: a dictionary corresponding to one sample from the dataset. Should contain a 'profile' entry.
     :return: tensor of the meta-data embedding vector
     """
     # user profile embedding
-    profile = data["profile"]
     profile_embedding = torch.tensor([
-        len(profile["name"]),
-        len(profile["screen_name"]),
-        math.log(profile["statuses_count"]+1),
-        math.log(profile["followers_count"]+1),
-        math.log(profile["friends_count"]+1),
-        math.log(profile["favourites_count"]+1),
-        profile["protected"],
-        profile["verified"],
+        len("" if user_data.name is None else user_data.name),
+        len("" if user_data.screen_name is None else user_data.screen_name),
+        math.log(user_data.statuses_count+1),
+        math.log(user_data.followers_count+1),
+        math.log(user_data.friends_count+1),
+        math.log(user_data.favourites_count+1),
+        user_data.verified,
     ])
     return profile_embedding
 
-def create_tweet_vectors(data, tokenizer, model, batch_size = math.inf, max_tweets = math.inf, device ='cuda' if torch.cuda.is_available() else 'cpu'):
+def create_tweet_vectors(tweet_data, tokenizer, model, batch_size = math.inf, max_tweets = math.inf, device ='cuda' if torch.cuda.is_available() else 'cpu'):
     """
     creates the tweets embedding vector for the provided user.
     :param device: the device on which to process the data.
     :param model: the model used for creating semantic embeddings from tweets
     :param tokenizer: the tokenizer used for creating tokens from text strings
-    :param data: a dictionary corresponding to one sample from the dataset. Should contain a 'tweets' entry.
+    :param tweet_data: a dictionary corresponding to one sample from the dataset. Should contain a 'tweets' entry.
     :param batch_size: the batch size used to process the tweets. Defaults to processing all tweets at once
     :param max_tweets: the maximum amount of tweets to process per profile. Defaults to processing all available tweets at once.
     :return: tensor of the tweets embedding vector
     """
-    tweet_count = len(data["tweets"])
+    tweet_count = len(tweet_data)
     # if no tweets are available, return a default vector
     if tweet_count == 0:
         return torch.atleast_2d(torch.zeros(768)).detach().cpu()
 
     # get the maximum wanted tweets to process
-    texts = list(map(lambda x: x["text"],data["tweets"]))[0: min(tweet_count, max_tweets)]
+    texts = list(map(lambda x: x.text, tweet_data))[0: min(tweet_count, max_tweets)]
     # process texts in batches
-    max_embedding = None
     raw_embeddings = []
     index = 0
     while index < min(tweet_count, max_tweets):

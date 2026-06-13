@@ -4,20 +4,11 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 import os
-
-class Cresci17SetTypes(Enum):
-    GENUINE_USER = 1
-    FAKE_FOLLOWER = 2
-    SOCIAL_SPAM_1 = 3
-    SOCIAL_SPAM_2 = 4
-    SOCIAL_SPAM_3 = 5
-    TRADITIONAL_SPAM_1 = 6
-    TRADITIONAL_SPAM_2 = 7
-    TRADITIONAL_SPAM_3 = 8
-    TRADITIONAL_SPAM_4 = 9
-
-
-class Cresci17(Dataset):
+import csv
+from dataset_utils.constants import TweetData,UserData,Sample,Cresci17SetTypes
+from dataset_utils.splitting import hash_split_multi
+from collections import defaultdict
+class Cresci17(IterableDataset):
     """
     Dataset for the Cresci-2017. The zipped dataset file should be named 'cresci-2017.csv.zip' and should be placed in the directory /datasets.
     """
@@ -74,47 +65,63 @@ class Cresci17(Dataset):
                 zipObj.extractall(default_file_path)
                 zipObj.close()
 
-        # load subset dataset with only relevant entries
-        self.user_data = pd.read_csv(user_data_path, usecols=['id','name','screen_name','statuses_count','followers_count','friends_count',
-                                                             'favourites_count','listed_count','lang','protected','verified'])
-        self.tweet_data = pd.read_csv(tweet_data_path, encoding="latin-1", dtype={'id': str},
-                                      usecols=['id', 'text', 'user_id', 'in_reply_to_status_id', 'in_reply_to_user_id', 'in_reply_to_screen_name',
-                                        'retweet_count', 'reply_count', 'favorite_count', 'num_hashtags', 'num_urls', 'num_mentions', 'timestamp'])
+    def __iter__(self):
 
-        # clean up missing values
-        clean_dict = {
-            'verified':{np.nan: 0},
-            'protected':{np.nan: 0},
-        }
-        self.user_data = self.user_data.replace(clean_dict)
+        users = {}
 
-        # remove tweets and user profiles without text content
-        self.tweet_data = self.tweet_data.dropna(subset=['text'])
-        self.user_data = self.user_data.dropna(subset=['name', 'screen_name'])
+        with open(self.user_data_path, newline="", encoding="latin-1") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if hash_split_multi(row["id"]) != self.mode:
+                    continue
+                if row["lang"] != "en" and row["lang"] != "NULL":
+                    continue
+                users[row["id"]] = row
 
-        #print("medians:", self.user_data.median(numeric_only=True))
+        tweets = defaultdict(list)
+        with open(self.tweet_data_path, newline="", encoding="latin-1") as f:
+            reader = csv.DictReader(f,  delimiter=",")
+            for row in reader:
+                    
+                user_id = row["user_id"]
 
-    def __len__(self):
-        """
-        gives the amount of user profiles in the dataset
-        :return: the length of the dataset
-        """
-        return len(self.user_data)
+                if user_id not in users:
+                    continue
+                
+                if not row or not row.get("text"):
+                    continue
 
-    def __getitem__(self, idx):
-        """
-        reads out one user profile and its associated tweets from the dataset
-        :param idx: the index for one sample of the dataset (user profile)
-        :return: a dictionary with the user profile data, list of tweets. Additionally, returns the label for the dataset
-        """
-        # get row if the user profile and its id
-        profile = self.user_data.iloc[idx]
-        user_id = profile["id"]
+                row["in_reply_to_screen_name"] = 0
 
-        # get all tweets from the selected user profile
-        tweets = self.tweet_data[self.tweet_data["user_id"] == user_id]
-        result = {
-            "profile": profile.to_dict(),
-            "tweets": tweets.to_dict("records"),
-        }
-        return result, self.subset_type.value
+                tweets[user_id].append(row)
+                
+       
+        for user_id in users:  
+            try:
+                user_tweets = tweets.get(user_id, [])   
+                processed_tweets = [TweetData.from_row(tweet_row) for tweet_row in user_tweets]
+            except ValueError:
+                continue
+            yield Sample(
+                    tweet_data=processed_tweets,
+                    user_data=UserData.from_row(users[user_id]),
+                    label=str(self.subset_type.value),
+                    )
+        
+
+        
+
+        
+   
+    
+
+
+
+        
+
+
+
+   
+
+    
+    

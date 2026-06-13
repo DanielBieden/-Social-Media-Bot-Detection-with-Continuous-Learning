@@ -4,11 +4,10 @@ from zipfile import ZipFile
 from warnings import warn
 from torch.utils.data import IterableDataset
 try:
-    from .constants import UserData, TweetData, Sample, normalize_user_id,_safe_dict, clean_text
+    from dataset_utils.constants import UserData, TweetData, Sample, normalize_user_id,_safe_dict, clean_text
 except ImportError:
-    from constants import UserData, TweetData, Sample, normalize_user_id, _safe_dict, clean_text
+    from dataset_utils.constants import UserData, TweetData, Sample, normalize_user_id, _safe_dict, clean_text
 import os
-
 from dataset_utils.splitting import hash_split_multi
 class Twibot20(IterableDataset):
     """
@@ -77,35 +76,64 @@ class Twibot20(IterableDataset):
     def __iter__(self):
         for path in self.files:
             with open(path, "r", encoding="utf-8") as f:
-
-                data = json.load(f)  # Twibot-20 files are NOT huge JSON arrays per line, usually list-based
-                tweet_id = 0
+                data = json.load(f)
+                
+                current_tweets = []
+                current_user_id = None
+                #for the flush of the last user
+                old_user = None
+                previous_label = None
                 for row in data:
-            
-
+                    
+                    # creates a user
                     user_id = normalize_user_id(row.get("ID"))
-                    profile = _safe_dict(row.get("profile"))
-                    split = hash_split_multi(user_id) 
+                    split = hash_split_multi(user_id)
                     if split != self.mode:
                         continue
-
+                    profile = _safe_dict(row.get("profile"))
                     user = UserData.from_row({
-                    "id": user_id,
-                    "profile": profile
+                        "id": user_id,
+                        "profile": profile
                     })
+    
 
+                    #creates the bot_label
                     bot_label = row.get("label")
                     if bot_label == "1":
                         bot_label = "bot"
                     elif bot_label == "0":
                         bot_label = "human"
-                    elif bot_label == "":
-                        bot_label = ""
-                    elif bot_label is None:
-                        bot_label = ""
+                    else:
                         continue
-                    
-                    
+
+                    if previous_label is None:
+                        previous_label = bot_label
+
+                    if old_user is None:
+                        old_user = user
+
+                    if current_user_id is None:
+                        current_user_id = user_id
+
+                    #creates the tweet list
+                    # Has the User changed?
+                    # yes -> reininitilize the tweet_list, as well as the current_user, 
+                    # and yield the tweets of the old list
+                    # no --> append the tweet list
+                    if current_user_id != user_id:
+
+                        yield Sample(
+                                tweet_data=current_tweets,
+                                user_data=old_user,
+                                label=str(previous_label),
+                            )
+
+                        current_tweets = []
+                        current_user_id = user_id
+                        old_user = user
+                        previous_label = bot_label
+                        
+                    tweet_id = 0
                     tweets = row.get("tweet",[])
                     if tweets is None:
                         continue
@@ -114,35 +142,31 @@ class Twibot20(IterableDataset):
                         tweet = str(tweet).strip()
                         if not tweet:
                             continue
-                        #adds missinh fields
-                        tweet_row = {
-                        "id": {tweet_id},
-                        "text": tweet,
-                        "user_id": user_id,
-                        "created_at": None,
-                        "public_metrics": {},
-                        "entities": {},
-                    }   
-                        
 
-                        yield Sample(
-                            tweet_data=TweetData.from_row(tweet_row),
-                            user_data=user,
-                            label=str(bot_label),
+                        tweet_row = {
+                            "id": tweet_id,
+                            "text": tweet,
+                            "user_id": user_id,
+                            "created_at": None,
+                            "public_metrics": {},
+                            "entities": {},
+                        }
+                        
+                        current_tweets.append(
+                            TweetData.from_row(tweet_row)
+                        )
+
+                #flush out the last_user
+                if current_tweets:
+                    if current_user_id == None:
+                        continue
+                        
+                    yield Sample(
+                        tweet_data=current_tweets,
+                        user_data=old_user,
+                        label=str(previous_label),
                     )
 
-    
-    
-  
+                    
 
-        
-       
-
-
-
-
-       
-
-
-
-        
+            
