@@ -160,29 +160,14 @@ class Caverlee11(IterableDataset):
                         user_data=UserData.from_row(users[current_user_id]),
                         label=label,
                     )
-                    
-
 if __name__ == "__main__":
     example = Caverlee11("train",0.8,0.1)
-    users = set()
-    size = 0
-    tweets = 0
+   
     for i,sample in enumerate(example):
-        size += 1
-        for tweet in sample.tweet_data:
-           users.add(tweet.user_id)
-           tweets += 1
-        if size != len(users):
-            print(size)
-            print(len(users))
-            print(sample.user_data.id)
-            print(len(sample.tweet_data))
-           
-            
-            
-            
-    print(size)
-    print(len(users))
+        print(sample.user_data)            
+      
 
+        if i == 10:
+            break             
             
         
