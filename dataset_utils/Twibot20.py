@@ -166,6 +166,16 @@ class Twibot20(IterableDataset):
                         user_data=old_user,
                         label=str(previous_label),
                     )
+if __name__ == "__main__":
+    example = Twibot20("train",0.8,0.1)
+   
+    for i,sample in enumerate(example):
+        print(sample.user_data)            
+      
+
+        if i == 10:
+            break
+        
                     
 
             

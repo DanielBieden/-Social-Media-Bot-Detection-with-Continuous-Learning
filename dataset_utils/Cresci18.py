@@ -209,25 +209,11 @@ class Cresci18(IterableDataset):
                 os.remove(db_path)
             except Exception:
                 pass
-                
-if __name__ == "__main__":
-    example = Cresci18("train",0.8,0.1)
-    users = set()
-    size = 0
-    for i,sample in enumerate(example):
-       size += 1
-       if sample.user_data.id in users:
-           print("Double")
-       for tweet in sample.tweet_data:
-           users.add(tweet.user_id)
 
-       if i == 100000:
-               break
         
        
-    print(size)
-    print(len(users))
-            
+ 
+
        
         
     
