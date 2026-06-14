@@ -1,8 +1,5 @@
-from enum import Enum
 from zipfile import ZipFile
-import numpy as np
-import pandas as pd
-from torch.utils.data import Dataset
+from torch.utils.data import IterableDataset
 import os
 import csv
 from dataset_utils.constants import TweetData,UserData,Sample,Cresci17SetTypes
@@ -12,13 +9,24 @@ class Cresci17(IterableDataset):
     """
     Dataset for the Cresci-2017. The zipped dataset file should be named 'cresci-2017.csv.zip' and should be placed in the directory /datasets.
     """
-    def __init__(self, root, subset_type):
+    def __init__(self,subset_type , mode :str, train_split: float = 0.8, dev_split: float = 0.1, root : str |None = None):
         """
-        :param root: the filepath of the dataset directory in which the dataset is stored.
-        :param subset_type: the wanted subset of the dataset.
-        """
-        self.subset_type = subset_type
+        :param root(OPTIONAL): the filepath of the dataset directory in which the dataset is stored, if none is given "datasets"
+        :param mode: Dataset split to use ("train", "dev", or "test").
+        :param train_split: Fraction of users assigned to the training set (e.g. 0.8 = 80%).
+        :param dev_split: Fraction of users assigned to the validation set (e.g. 0.1 = 10
 
+        Should you want all Subsets, you need to call the constructor for all Cresci17SetTypes. 
+        """
+        #__init__ does the filehandling
+        if root == None:
+            root = "datasets"
+
+        self.mode = mode
+
+        assert train_split + dev_split < 1.0
+
+        self.subset_type = subset_type
         # select appropriate subdirectory to find wanted subset
         default_file_path = os.path.join(root, "cresci-2017" ,"datasets_full.csv")
         subset_path  = ""
@@ -45,12 +53,12 @@ class Cresci17(IterableDataset):
                 raise ValueError(f"Unknown subset type for Cresci17 dataset was used: {subset_type}")
 
 
-        user_data_path = os.path.join(default_file_path, subset_path, "users.csv")
-        tweet_data_path = os.path.join(default_file_path, subset_path, "tweets.csv")
+        self.user_data_path = os.path.join(default_file_path, subset_path, "users.csv")
+        self.tweet_data_path = os.path.join(default_file_path, subset_path, "tweets.csv")
 
         # automatic unzipping of files if they don't exist in an unpackaged state
         # check if files exist
-        if not os.path.exists(user_data_path) or not os.path.exists(tweet_data_path):
+        if not os.path.exists(self.user_data_path) or not os.path.exists(self.tweet_data_path):
             # check if dataset in whole exists, else unzip it
             if not os.path.exists(default_file_path):
                 # check if zip file for the whole dataset exists
@@ -60,6 +68,7 @@ class Cresci17(IterableDataset):
                 with ZipFile(os.path.join(root, "cresci-2017.csv.zip")) as zipObj:
                     os.mkdir(os.path.join(root, "cresci-2017"))
                     zipObj.extractall(os.path.join(root, "cresci-2017"))
+                    
             # unzip subset
             with ZipFile(os.path.join(default_file_path, subset_path + ".zip")) as zipObj:
                 zipObj.extractall(default_file_path)
@@ -107,21 +116,3 @@ class Cresci17(IterableDataset):
                     user_data=UserData.from_row(users[user_id]),
                     label=str(self.subset_type.value),
                     )
-        
-
-        
-
-        
-   
-    
-
-
-
-        
-
-
-
-   
-
-    
-    
