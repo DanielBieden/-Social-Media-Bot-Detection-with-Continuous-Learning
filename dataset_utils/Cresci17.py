@@ -1,4 +1,3 @@
-
 from zipfile import ZipFile
 from torch.utils.data import IterableDataset
 import os
@@ -117,21 +116,3 @@ class Cresci17(IterableDataset):
                     user_data=UserData.from_row(users[user_id]),
                     label=str(self.subset_type.value),
                     )
-        
-
-        
-
-        
-   
-    
-
-
-
-        
-
-
-
-   
-
-    
-    
