@@ -15,19 +15,26 @@ class Cresci18(IterableDataset):
     Dataset for the Cresci18. The downloaded *.csv.zip files can be in the directory /datasets 
                               or in another dataset whose filepath needs to be given as param to the constructor.
     """
-    def __init__(self, mode :str, train_split: float = 0.8, dev_split: float = 0.1, root : str |None = None):
+    def __init__(self, mode :str, train_split: float = 0.8, dev_split: float = 0.1, root : str |None = None, use_only_labelled = True, label_mapping = ["bot","human","unlabelled"]):
         """
         :param root(OPTIONAL): the filepath of the dataset directory in which the dataset is stored, if none is given "datasets"
         :param mode: Dataset split to use ("train", "dev", or "test").
         :param train_split: Fraction of users assigned to the training set (e.g. 0.8 = 80%).
         :param dev_split: Fraction of users assigned to the validation set (e.g. 0.1 = 10
-
+        :param use_only_labelled: if only users that have been categorized into 'bot' or 'human' should be provided
+        :param label_mapping: List of labels to use for provided samples. Format: `['bot', 'human', 'unlabelled']`
         """
          #__init__ does the filehandling
         if root is None:
             root = "datasets"
         
         self.mode = mode
+        self.use_only_labelled = use_only_labelled
+        self.label_mapping = {
+            '0': label_mapping[1],
+            '1': label_mapping[0],
+            '':  label_mapping[2],
+        }
 
         assert train_split + dev_split < 1.0
 
@@ -81,11 +88,15 @@ class Cresci18(IterableDataset):
             """
             # 1. Load users into memory
             users = {}
+            labels = {}
             with open(self.user_data_path, newline="", encoding="utf-8") as f:
                 reader = csv.DictReader(f, delimiter=",")
                 for row in reader:
-                    users[row["id"]] = UserData.from_row(row)
+                    label = row["bot"]
+                    if self.use_only_labelled and not label in ['0','1']: continue
 
+                    users[row["id"]] = UserData.from_row(row)
+                    labels[row["id"]] = label
             # 2. Get CSV headers from tweets file to dynamically map SQLite columns
             with open(self.tweets_data_path, newline="", encoding="utf-8") as f:
                 reader = csv.DictReader(f, delimiter=",")
@@ -173,7 +184,8 @@ class Cresci18(IterableDataset):
                             raise ValueError(
                             f"The CSV file at {self.tweets_data_path} is empty or missing headers."
                         )
-                        current_label = getattr(user_obj, "label", "")
+                        #current_label = getattr(user_obj, "label", "")
+                        current_label = self.label_mapping.get(labels[last_user], "unknown")
                         yield Sample(
                             tweet_data=current_tweets,
                             user_data=user_obj,
@@ -196,7 +208,8 @@ class Cresci18(IterableDataset):
                             raise ValueError(
                             f"The CSV file at {self.tweets_data_path} is empty or missing headers."
                         )
-                current_label = getattr(user_obj, "label", "")
+                #current_label = getattr(user_obj, "label", "")
+                current_label = self.label_mapping.get(labels[last_user], "unknown")
                 yield Sample(
                     tweet_data=current_tweets,
                     user_data=user_obj,
