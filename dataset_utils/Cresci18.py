@@ -185,11 +185,11 @@ class Cresci18(IterableDataset):
                             f"The CSV file at {self.tweets_data_path} is empty or missing headers."
                         )
                         #current_label = getattr(user_obj, "label", "")
-                        current_label = self.label_mapping.get(labels[last_user], "unknown")
+                        current_label = self.label_mapping.get(labels[last_user], self.label_mapping[''])
                         yield Sample(
                             tweet_data=current_tweets,
                             user_data=user_obj,
-                            label=str(current_label),
+                            label=current_label,
                         )
                     current_tweets = []
 
@@ -209,11 +209,11 @@ class Cresci18(IterableDataset):
                             f"The CSV file at {self.tweets_data_path} is empty or missing headers."
                         )
                 #current_label = getattr(user_obj, "label", "")
-                current_label = self.label_mapping.get(labels[last_user], "unknown")
+                current_label = self.label_mapping.get(labels[last_user], self.label_mapping[''])
                 yield Sample(
                     tweet_data=current_tweets,
                     user_data=user_obj,
-                    label=str(current_label),
+                    label=current_label,
                 )
 
             # 6. Database Connection Cleanup

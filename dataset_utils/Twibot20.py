@@ -126,7 +126,7 @@ class Twibot20(IterableDataset):
                         yield Sample(
                                 tweet_data=current_tweets,
                                 user_data=old_user,
-                                label=str(previous_label),
+                                label=previous_label,
                             )
 
                         current_tweets = []
@@ -165,7 +165,7 @@ class Twibot20(IterableDataset):
                     yield Sample(
                         tweet_data=current_tweets,
                         user_data=old_user,
-                        label=str(previous_label),
+                        label=previous_label,
                     )
 
                     
