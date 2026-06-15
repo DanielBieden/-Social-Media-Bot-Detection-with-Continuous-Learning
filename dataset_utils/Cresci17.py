@@ -1,3 +1,4 @@
+
 from zipfile import ZipFile
 from torch.utils.data import IterableDataset
 import os
@@ -9,7 +10,7 @@ class Cresci17(IterableDataset):
     """
     Dataset for the Cresci-2017. The zipped dataset file should be named 'cresci-2017.csv.zip' and should be placed in the directory /datasets.
     """
-    def __init__(self,subset_type , mode :str, train_split: float = 0.8, dev_split: float = 0.1, root : str |None = None):
+    def __init__(self,subset_type , mode :str, train_split: float = 0.8, dev_split: float = 0.1, root : str |None = None, custom_label = None):
         """
         :param root(OPTIONAL): the filepath of the dataset directory in which the dataset is stored, if none is given "datasets"
         :param mode: Dataset split to use ("train", "dev", or "test").
@@ -23,7 +24,7 @@ class Cresci17(IterableDataset):
             root = "datasets"
 
         self.mode = mode
-
+        self.custom_label = custom_label
         assert train_split + dev_split < 1.0
 
         self.subset_type = subset_type
@@ -114,5 +115,23 @@ class Cresci17(IterableDataset):
             yield Sample(
                     tweet_data=processed_tweets,
                     user_data=UserData.from_row(users[user_id]),
-                    label=str(self.subset_type.value),
+                    label= self.subset_type.value if self.custom_label is None else self.custom_label,
                     )
+        
+
+        
+
+        
+   
+    
+
+
+
+        
+
+
+
+   
+
+    
+    
