@@ -75,6 +75,9 @@ class Cresci17(IterableDataset):
                 zipObj.extractall(default_file_path)
                 zipObj.close()
 
+        # check if tweet data is available (only relevant for Traditional_spambots_2,3,4)
+        self.tweet_data_available = os.path.exists(self.tweet_data_path)
+
     def __iter__(self):
 
         users = {}
@@ -89,21 +92,22 @@ class Cresci17(IterableDataset):
                 users[row["id"]] = row
 
         tweets = defaultdict(list)
-        with open(self.tweet_data_path, newline="", encoding="latin-1") as f:
-            reader = csv.DictReader(f,  delimiter=",")
-            for row in reader:
-                    
-                user_id = row["user_id"]
+        if self.tweet_data_available:
+            with open(self.tweet_data_path, newline="", encoding="latin-1") as f:
+                reader = csv.DictReader(f,  delimiter=",")
+                for row in reader:
 
-                if user_id not in users:
-                    continue
-                
-                if not row or not row.get("text"):
-                    continue
+                    user_id = row["user_id"]
 
-                row["in_reply_to_screen_name"] = 0
+                    if user_id not in users:
+                        continue
 
-                tweets[user_id].append(row)
+                    if not row or not row.get("text"):
+                        continue
+
+                    row["in_reply_to_screen_name"] = 0
+
+                    tweets[user_id].append(row)
                 
        
         for user_id in users:  
