@@ -10,19 +10,20 @@ class Cresci17(IterableDataset):
     """
     Dataset for the Cresci-2017. The zipped dataset file should be named 'cresci-2017.csv.zip' and should be placed in the directory /datasets.
     """
-    def __init__(self,subset_type , mode :str, train_split: float = 0.8, dev_split: float = 0.1, root : str |None = None, custom_label = None):
+    def __init__(self,subset_type , mode :str, train_split: float = 0.8, dev_split: float = 0.1, root : str |None = None, custom_label = None, sub_sample_size = -1):
         """
         :param root(OPTIONAL): the filepath of the dataset directory in which the dataset is stored, if none is given "datasets"
         :param mode: Dataset split to use ("train", "dev", or "test").
         :param train_split: Fraction of users assigned to the training set (e.g. 0.8 = 80%).
         :param dev_split: Fraction of users assigned to the validation set (e.g. 0.1 = 10
-
+        :param sub_sample_size: (Default: -1) the upper limit of the amount samples the iterator should provide. Fewer samples are possible if the dataset doesn't have enough samples.
         Should you want all Subsets, you need to call the constructor for all Cresci17SetTypes. 
         """
         #__init__ does the filehandling
         if root == None:
             root = "datasets"
 
+        self.sub_sample_size = sub_sample_size
         self.mode = mode
         self.custom_label = custom_label
         assert train_split + dev_split < 1.0
@@ -108,8 +109,8 @@ class Cresci17(IterableDataset):
                     row["in_reply_to_screen_name"] = 0
 
                     tweets[user_id].append(row)
-                
-       
+
+        iteration = -self.sub_sample_size
         for user_id in users:  
             try:
                 user_tweets = tweets.get(user_id, [])   
@@ -121,6 +122,10 @@ class Cresci17(IterableDataset):
                     user_data=UserData.from_row(users[user_id]),
                     label= self.subset_type.value if self.custom_label is None else self.custom_label,
                     )
+            # count and stop early if only a sub sample is requested
+            if self.sub_sample_size > 0:
+                iteration += 1
+                if iteration >= 0: break
         
 
         

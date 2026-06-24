@@ -15,19 +15,22 @@ class Twibot22Improved(IterableDataset):
     """
 
     def __init__(self, mode: str, train_split: float = 0.8, dev_split: float = 0.1, root: str | None = None,
-                 label_mapping=["bot", "human"]):
+                 label_mapping=["bot", "human"], sub_sample_size = -1):
         """
         :param root: the filepath of the dataset directory in which the dataset is stored.
         :param mode: Dataset split to use ("train", "dev", or "test").
         :param train_split: Fraction of users assigned to the training set (e.g. 0.8 = 80%).
         :param dev_split: Fraction of users assigned to the validation set (e.g. 0.1 = 10
         :param label_mapping: List of labels to use for provided samples. Format: `['bot', 'human', 'unlabelled']`
+        :param sub_sample_size: (Default: -1) the upper limit of the amount samples the iterator should provide. Fewer samples are possible if the dataset doesn't have enough samples.
+        A value of `-1` provides the default amount of samples.
         """
         if ijson.backend_name == 'python': print("WARNING: ijson is running in ultra-slow pure-Python mode! Use/Install libyajl2 instead for faster processing.")
 
         # __init_ does the file handling
         if root == None: root = "datasets"
 
+        self.sub_sample_size = sub_sample_size
         # remap split label to work with provided dataset
         mode_map = {
             "train": "train",
@@ -81,7 +84,7 @@ class Twibot22Improved(IterableDataset):
 
         for path in self.tweet_paths:
             if not os.path.exists(path):
-                warn(f"Dataset 'Twibot20.{path}' file not found. Please make sure every file is donwloaded in the dataset directory.")
+                warn(f"Dataset 'Twibot20.{path}' file not found. Please make sure every file is downloaded in the dataset directory.")
 
     def stream_tweet_data(self,json_path: str):
         """
@@ -206,7 +209,6 @@ class Twibot22Improved(IterableDataset):
                     print(f"\r--> Successfully cached {len(users)} users in memory.", end="", flush=True)
 
         # prepare access to database for tweets
-        print("path at infer: ", self.tweet_database_path)
         env = lmdb.open(self.tweet_database_path, max_dbs=1, readonly=True)
         tweet_db = env.open_db(b'tweets', dupsort=True)
 
@@ -214,6 +216,7 @@ class Twibot22Improved(IterableDataset):
             with txn.cursor() as cursor:
 
                 # loop over users
+                iteration = -self.sub_sample_size
                 for user_id in user_list:
                     # get tweets from database
                     tweets = []
@@ -233,4 +236,8 @@ class Twibot22Improved(IterableDataset):
                         user_data=user_data,
                         label=label,
                     )
+                    # count and stop early if only a sub sample is requested
+                    if self.sub_sample_size > 0:
+                        iteration += 1
+                        if iteration >= 0: break
         env.close()
