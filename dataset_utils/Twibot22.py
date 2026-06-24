@@ -114,8 +114,8 @@ class Twibot22(IterableDataset):
                 users[user_id] = row
                 user_count += 1
                 if user_count % 50000 == 0:
-                    print(f"    Processed {user_count} users...")
-                    print(f"--> Successfully cached {len(users)} users in memory.")
+                    #print(f"    Processed {user_count} users...")
+                    print(f"\r--> Successfully cached {len(users)} users in memory.", end="", flush=True)
 
                # 1. Create a temporary database file on your disk
         db_path = os.path.join(os.path.dirname(self.user_data_path), "temp_tweets_cache.db")
@@ -146,32 +146,34 @@ class Twibot22(IterableDataset):
             with open(path, "rb") as f:
                 parser = ijson.items(f, "item")
                 try:
-                    tweet_dict = next(parser)
+                    #tweet_dict = next(parser)
+                    for i, tweet_dict in enumerate(parser):
+                        tweet_count += 1
+                        # Reached the end of the JSON array normally
+                        if tweet_count % 100000 == 0:
+                            print(f"\r[Streaming] Processed {tweet_count:,} tweets... Matched: {matched_count:,}", end="", flush=True)
+
+                        raw_author_id = tweet_dict.get("author_id", 0)
+                        user_id = normalize_user_id(raw_author_id)
+
+                        if user_id in users and user_id in labels:
+                            try:
+                                # FIX: Use our custom handler to safely serialize Decimal values
+                                # create smaller dictionary of only relevant information
+                                reduced_dict = {"text": tweet_dict.get("text", "")}
+                                raw_json_str = json.dumps(reduced_dict, default=json_decimal_handler)
+                                batch.append((user_id, raw_json_str))
+                                matched_count += 1
+                            except Exception as e:
+                                print(f"⚠️ Warning: Failed to serialize tweet for user {user_id}: {e}")
+                                continue
+
+                            if len(batch) >= batch_size:
+                                cursor.executemany("INSERT INTO tweets VALUES (?, ?)", batch)
+                                conn.commit()
+                                batch = []
                 except StopIteration:
-                        break 
-                
-                tweet_count += 1
-                    # Reached the end of the JSON array normally
-                if tweet_count % 100000 == 0:
-                        print(f"    [Streaming] Processed {tweet_count:,} tweets... Matched: {matched_count:,}")
-
-                raw_author_id = tweet_dict.get("author_id", 0)
-                user_id = normalize_user_id(raw_author_id)
-
-                if user_id in users and user_id in labels:
-                    try:
-                        # FIX: Use our custom handler to safely serialize Decimal values
-                        raw_json_str = json.dumps(tweet_dict, default=json_decimal_handler)
-                        batch.append((user_id, raw_json_str))
-                        matched_count += 1
-                    except Exception as e:
-                            print(f"⚠️ Warning: Failed to serialize tweet for user {user_id}: {e}")
-                            continue
-
-                    if len(batch) >= batch_size:
-                        cursor.executemany("INSERT INTO tweets VALUES (?, ?)", batch)
-                        conn.commit()
-                        batch = []
+                        break
 
         if batch:
             cursor.executemany("INSERT INTO tweets VALUES (?, ?)", batch)
