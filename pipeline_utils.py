@@ -133,3 +133,125 @@ def test_classifier(classifier, input_samples, ground_truth_labels, device = 'cu
         predictions.extend(prediction.detach().cpu().numpy())
         ground_truths.extend(targets.detach().cpu().numpy())
     return ground_truths, predictions
+
+
+def multi_svm_training_loop(classifier, replay_buffer, input_samples, ground_truth_labels, epochs = 15, batch_size = 128, device = 'cuda' if torch.cuda.is_available() else 'cpu'):
+    # general setup
+    C = 1.0
+    learning_rate = 0.1
+    optimizer = torch.optim.SGD(classifier.parameters(), lr=learning_rate)
+
+    classifier.train()
+    # create dataset from ground_truths and embedding features for batch processing
+    input_tensors = torch.tensor(np.array(input_samples))
+    ground_truth_tensors = torch.tensor(ground_truth_labels)
+    dataset = TensorDataset(input_tensors, ground_truth_tensors)
+    train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    for epoch in range(epochs):
+        classifier.train()
+        running_loss = 0.0
+
+        predictions = []
+        ground_truths = []
+
+        for batch_idx, (inputs, targets) in enumerate(train_dataloader):
+            dataset_inputs = inputs.float().to(device)
+            dataset_targets = targets.to(device)
+
+            # sample buffer and concatenate it to dataset sample
+            buffer_targets, buffer_inputs = replay_buffer.get_samples(round(batch_size/8))
+
+            inputs = torch.concat((dataset_inputs, buffer_inputs.to(device)))
+            targets = torch.concat((dataset_targets, buffer_targets.to(device))).int()
+
+            # encode targets in a binary fashion
+            remapped_targets = torch.full((len(targets), classifier.size), -1).to(device)
+            remapped_targets[torch.arange(len(targets)), targets] = 1
+
+            # pass data through classifier and calculate loss
+            optimizer.zero_grad()
+            outputs = classifier(inputs)
+
+
+            # calculate loss
+            regularization_loss = 0.5 * torch.sum(classifier.get_weights() ** 2)
+            hinge_loss = torch.mean(torch.clamp(1 - remapped_targets * outputs, min=0))
+            loss = regularization_loss + C * hinge_loss
+            loss.backward()
+            optimizer.step()
+
+            # prediction
+            prediction = torch.argmax(outputs, dim=1)
+            # add samples to the buffer
+            replay_buffer.add_samples(targets[:16].detach(), inputs[:16].detach())
+
+            # statistics
+            predictions.extend(prediction[:batch_size].detach().cpu().numpy())
+            ground_truths.extend(targets[:batch_size].detach().cpu().numpy())
+            running_loss += loss.item() * inputs.size(0)
+
+        # Calculate average loss across the entire epoch
+        epoch_loss = running_loss / len(input_samples)
+        print(f"Epoch [{epoch + 1}/{epochs}] - Loss: {epoch_loss:.4f}")
+    return ground_truths, predictions
+
+def confidence_classifier_training_loop(classifier, criterion, optimizer ,input_samples, ground_truth_labels, epochs = 15, bot_label = 0, batch_size = 128, device = 'cuda' if torch.cuda.is_available() else 'cpu'):
+    classifier.train()
+    # create dataset from ground_truths and embedding features for batch processing
+    input_tensors = torch.tensor(np.array(input_samples))
+    ground_truth_tensors = torch.tensor(ground_truth_labels)
+    dataset = TensorDataset(input_tensors, ground_truth_tensors)
+    train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    inconfident_samples_buffer = []
+
+    for epoch in range(epochs):
+        classifier.train()
+        running_loss = 0.0
+
+        predictions = []
+        ground_truths = []
+
+        for batch_idx, (inputs, targets) in enumerate(train_dataloader):
+            inputs = inputs.float().to(device)
+            targets = targets.to(device)
+
+            # sample from buffer
+            sample_size = min(len(inconfident_samples_buffer), 16)
+            buffer_sample = inconfident_samples_buffer[:sample_size]
+            inconfident_samples_buffer = inconfident_samples_buffer[sample_size:]
+
+            if sample_size != 0:
+                buffer_sample = torch.stack(buffer_sample).to(device)
+                buffer_targets = torch.full((sample_size, ), bot_label).to(device)
+
+                # concat
+                inputs = torch.concat((inputs, buffer_sample)).to(device)
+                targets = torch.concat((targets, buffer_targets)).to(device)
+
+            # pass data through classifier and calculate loss
+            outputs, prob, is_confident = classifier(inputs)
+            loss = criterion(outputs, targets)
+
+            # optimize classifier
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # prediction
+            prediction = torch.argmax(outputs, dim=1)
+
+            # add to buffer if confidence is below the threshold
+            to_add = inputs[torch.sum(is_confident,1) == 0].detach()
+            inconfident_samples_buffer.extend(to_add)
+
+            # statistics
+            predictions.extend(prediction.detach().cpu().numpy())
+            ground_truths.extend(targets.detach().cpu().numpy())
+            running_loss += loss.item() * inputs.size(0)
+
+        # Calculate average loss across the entire epoch
+        epoch_loss = running_loss / len(input_samples)
+        print(f"Epoch [{epoch + 1}/{epochs}] - Loss: {epoch_loss:.4f}")
+    return ground_truths, predictions
