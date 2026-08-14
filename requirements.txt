@@ -1,0 +1,13 @@
+torch
+numpy
+scikit-learn
+matplotlib
+umap-learn
+transformers
+pandas
+platformdirs
+ijson
+langdetect
+lmdb
+joblib
+hdbscan

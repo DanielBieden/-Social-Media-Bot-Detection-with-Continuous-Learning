@@ -7,11 +7,11 @@ Multiple different datasets are implemented, but only a subset is actually relev
 The remaining dataset are not used, as they lack the data the required tweet text information from users.
 The following list provides an overview of the relevant datasets.
 
-- Caverlee 11
-- Cresci 17
-- Cresci 18
-- Twibot 20
-- Twibot 22
+- [Caverlee 11](Caverlee11.py)
+- [Cresci 17](Cresci17.py)
+- [Cresci 18](Cresci18.py)
+- [Twibot 20](Twibot20.py)
+- [Twibot 22](Twibot22Improved.py)
 ### Datasets: General 
 In general all datasets have different splits that can be accessed with `train`, `dev` or `test`. 
 Additionally, the label of the samples can be easily be remapped by proving a list for the wanted labels.
@@ -20,16 +20,16 @@ Finally, it can be specified to only use a subset of the dataset, there  by redu
 ### Twibot 22
 Twibot 22 has two implementations, due to its size.
 The raw dataset files are split into multiple JSON files that are each 10GB big and combine into a total dataset size of 125GB.
-The 'normal' Twibot22 dataset class just parses and iterates over the JSON files, resulting in a slow and resource intensive process. 
-As a preferred alternative the 'Twibot22Improved' class should be used. 
+The 'normal' [Twibot22](Twibot22.py) dataset class just parses and iterates over the JSON files, resulting in a slow and resource intensive process. 
+As a preferred alternative the [Twibot22Improved](Twibot22Improved.py) class should be used. 
 It functions by creating a new reduced dataset from the original dataset and keeps only the necessary information, shrinking the file size to 25GB and speeding up iteration.
 To note, the reduced dataset needs to be instantiated once, by calling the function `prepare_dataset()` before the dataset can be used.
 
-## Interleaved Iterable Dataset 
+## [Interleaved Iterable Dataset](InterleavedIterableDataset.py)
 The Purpose of the Interleaved Iterable Dataset is combine multiple iterable dataset into one.
 It shuffles the provided datasets either using `RoundRobin` or `Random`.
 
-## Processed Dataset
+## [Processed Dataset](ProcessedDataset.py)
 The Processed Dataset class provides the option to load tensors from a file as a dataset.
 It is primarily used to speed up the experiments. 
 As the feature vector creation pipeline is unchanged between different classification heads, 
@@ -38,8 +38,8 @@ This allows us to run the computationally heavy pipeline only once instead of mu
 
 ## Utilities
 
-### Splitting 
+### [Splitting](splitting.py) 
 The splitting function is used to separate a dataset that does not have a predefined training, development and testing split into these subsets.
 
-### Constants 
+### [Constants](constants.py) 
 The file provides many different functions and utilities that are repeatedly used in the datasets.
